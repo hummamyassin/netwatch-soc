@@ -47,6 +47,11 @@ tables, the same signal a Medium alert carries.
 | Status stepper | Triage | New / Investigating / Closed; current step accent-tinted |
 | Activity timeline | Triage | Newest first, status changes as filled nodes, notes as inline cards |
 | Empty state | No log, no alerts, no matches, no connections | Dashed border, says what happened and what to do next |
+| Alert summary | Investigation header | Badges + alert ID, title, `source → destination` with port/protocol, one line of key facts |
+| Explanation | Investigation | The rule's own sentences laid out as Trigger / Observed / Context |
+| Glossary term | Headings, detail labels, chart notes | Dotted underline with a one-line hover explanation (`ui_components.GLOSSARY`) |
+| Evidence table | Investigation | Key columns first (time, IPs, port, proto, state, event ID) with header tooltips; all fields in an "All fields" expander; state legend for the codes present |
+| Marker legend | Timeline | Dotted swatch per severity present; hovering a marker shows rule, severity, start time and connection count |
 
 Feedback for workflow actions uses **toasts** (transient, out of the way).
 Errors stay inline next to the control that caused them.

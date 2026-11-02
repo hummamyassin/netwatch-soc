@@ -294,6 +294,21 @@ def case_history_table(case: Case) -> pd.DataFrame:
     )
 
 
+# Evidence columns shown first; every other field stays available in the full view.
+EVIDENCE_PRIMARY = ["Time (UTC)", "Source", "Destination", "Dst port", "Proto", "State", "Event ID"]
+
+
+def compact_evidence_times(events: pd.DataFrame) -> tuple[pd.DataFrame, str | None]:
+    """When every event is on the same UTC date, show only the time and return the date separately.
+
+    Saves a wide column without hiding information: the date is printed once above the table.
+    """
+    dates = {value[:10] for value in events["Time (UTC)"]}
+    if len(dates) != 1:
+        return events, None
+    return events.assign(**{"Time (UTC)": [value[11:] for value in events["Time (UTC)"]]}), dates.pop()
+
+
 def supporting_events(connections: pd.DataFrame, alert: Alert) -> pd.DataFrame:
     """The connections behind an alert, in time order, formatted for display."""
     events = connections.loc[connections["event_id"].isin(set(alert.event_ids))].sort_values(

@@ -264,6 +264,22 @@ class SupportingEventTests(unittest.TestCase):
         self.assertEqual(set(events["State"]), {"REJ"})
         self.assertEqual(events["Time (UTC)"].tolist(), sorted(events["Time (UTC)"]))
 
+    def test_compact_times_keep_every_row_and_field(self):
+        connections = an.load_log(DEMO_TSV).connections
+        alert = next(a for a in run_detection(connections) if a.rule_id == "NW-004" and a.severity == "High")
+        events = dd.supporting_events(connections, alert)
+        compact, date = dd.compact_evidence_times(events)
+        self.assertEqual(date, "2025-03-10")
+        self.assertEqual(compact["Time (UTC)"].iloc[0], "08:50:00")
+        self.assertEqual((len(compact), list(compact.columns)), (len(events), list(events.columns)))
+        self.assertTrue(set(dd.EVIDENCE_PRIMARY) <= set(events.columns))
+
+    def test_compact_times_keep_dates_when_events_span_days(self):
+        events = pd.DataFrame({"Time (UTC)": ["2025-03-10 23:59:59", "2025-03-11 00:00:01"]})
+        compact, date = dd.compact_evidence_times(events)
+        self.assertIsNone(date)
+        self.assertEqual(compact["Time (UTC)"].tolist(), events["Time (UTC)"].tolist())
+
 
 if __name__ == "__main__":
     unittest.main()

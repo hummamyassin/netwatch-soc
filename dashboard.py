@@ -236,10 +236,24 @@ def timeline_chart(connections: pd.DataFrame, alerts: list[Alert]):
     fig = px.area(timeline, x="time", y="connections")
     fig.update_traces(line=dict(color=ACCENT, width=1.6), fillcolor="rgba(45, 212, 191, 0.12)",
                       hovertemplate="%{x|%H:%M} UTC<br>%{y} connections<extra></extra>")
-    for alert in alerts:
-        fig.add_vline(x=pd.Timestamp(alert.first_seen).tz_localize(None), line_width=1.5, line_dash="dot",
+    starts = [pd.Timestamp(alert.first_seen).tz_localize(None) for alert in alerts]
+    for alert, start in zip(alerts, starts):
+        fig.add_vline(x=start, line_width=1.5, line_dash="dot",
                       line_color=SEVERITY_COLORS.get(alert.severity, MUTED), opacity=0.85)
-    style_figure(fig, height=220)
+    if alerts:
+        # A small marker at the top of each line carries the hover details. It sits at the alert's
+        # real first_seen time; nothing is drawn for the time in between.
+        top = float(timeline["connections"].max()) * 1.08
+        fig.add_scatter(
+            x=starts, y=[top] * len(alerts), mode="markers", showlegend=False, cliponaxis=False,
+            marker=dict(symbol="triangle-down", size=10, line_width=0,
+                        color=[SEVERITY_COLORS.get(a.severity, MUTED) for a in alerts]),
+            customdata=[[a.rule_id, a.alert_type, a.severity, dd.format_ts(a.first_seen), a.connection_count]
+                        for a in alerts],
+            hovertemplate=("<b>%{customdata[1]}</b><br>%{customdata[0]}, %{customdata[2]} severity<br>"
+                           "Began %{customdata[3]}<br>%{customdata[4]} supporting connection(s)<extra></extra>"),
+        )
+    style_figure(fig, height=230)
     fig.update_xaxes(showgrid=False)
     return fig, bucket
 
@@ -273,7 +287,8 @@ def kpi_row(names: list[str], kpis: dict[str, int], keys: list[str]) -> None:
 def overview(dataset: dd.Dataset, alerts: list[Alert], store: inv.InvestigationStore) -> None:
     kpis = dd.overview_kpis(dataset.connections, alerts)
     open_alerts = sum(store.status(a.alert_id) != inv.CLOSED for a in alerts)
-    st.html(ui.section_header("Alerts", f"{open_alerts} of {len(alerts)} still open, from the enabled rules"))
+    st.html(ui.section_header("Alerts", f"{open_alerts} of {len(alerts)} still open, by severity",
+                              hint_key="Severity"))
     kpi_row(["Total Alerts", "High Severity Alerts", "Medium Severity Alerts", "Low Severity Alerts"], kpis,
             ["kpi_total", "kpi_high", "kpi_medium", "kpi_low"])
     st.html(ui.section_header("Traffic", "Unique connections; repeated Zeek uids count once"))
@@ -351,9 +366,11 @@ def traffic_analysis(connections: pd.DataFrame, alerts: list[Alert]) -> None:
 
     with st.container(border=True):
         fig, bucket = timeline_chart(connections, alerts)
-        st.html(ui.panel_title("Connections over time",
-                               f"{bucket} buckets; dotted lines mark where each alert began, by severity"))
+        st.html(ui.panel_title("Connections over time", f"{bucket} buckets"))
         show_chart(fig, "chart_timeline")
+        if alerts:
+            present = [s for s in reversed(SEVERITIES) if any(a.severity == s for a in alerts)]
+            st.html(ui.marker_legend(present))
 
     sources = dd.top_sources_chart_data(connections)
     ports = dd.top_ports_chart_data(connections)
@@ -375,11 +392,12 @@ def traffic_analysis(connections: pd.DataFrame, alerts: list[Alert]) -> None:
     rows = max(len(protocols), len(states))
     left, right = st.columns(2)
     with left.container(border=True):
-        st.html(ui.panel_title("Protocol mix", "TCP vs UDP"))
+        st.html(ui.panel_title("Protocol mix", "TCP vs UDP", note_terms=("TCP", "UDP")))
         text = [f"{c:,} ({p:.1f}%)" for c, p in zip(protocols["connections"], protocols["percent"])]
         show_chart(ranked_bars(protocols, "proto", "connections", text, rows=rows), "chart_protocols")
     with right.container(border=True):
-        st.html(ui.panel_title("Connection states", "failed TCP attempts in amber"))
+        st.html(ui.panel_title("Connection states", "failed TCP attempts (S0, REJ) in amber",
+                               note_terms=("S0", "REJ")))
         if not an.has_connection_states(connections):
             st.html(ui.empty_state("No connection states", "Zeek's conn_state field is empty in this log."))
         else:
@@ -414,6 +432,7 @@ def run_action(action, message: str) -> None:
 
 
 def alert_details(alert: Alert) -> None:
+    st.html(ui.explanation_block(alert.explanation))
     with st.container(border=True):
         st.html(ui.panel_title("Alert details"))
         rows = list(dd.alert_detail_rows(alert).itertuples(index=False, name=None))
@@ -429,7 +448,7 @@ def alert_details(alert: Alert) -> None:
 def workflow_panel(store: inv.InvestigationStore, alert: Alert) -> None:
     case = store.case(alert.alert_id)
     key = alert.alert_id
-    with st.container(border=True):
+    with st.container(border=True, key="triage_panel"):
         st.html(ui.panel_title("Triage"))
         st.html(ui.status_stepper(case.status))
         if case.disposition:
@@ -479,10 +498,48 @@ def evidence_table(events: pd.DataFrame):
         {"Duration (s)": "{:.4f}"}, na_rep="None")
 
 
+EVIDENCE_COLUMNS = {
+    # Pixel widths sized for IPv4 and Zeek uids, so the key columns fit a 1280 px laptop screen.
+    "Time (UTC)": st.column_config.TextColumn("Time (UTC)", width=88, pinned=True),
+    "Source": st.column_config.TextColumn("Source IP", width=135),
+    "Destination": st.column_config.TextColumn("Destination IP", width=135),
+    "Dst port": st.column_config.NumberColumn("Port", format="%d", width=64,
+                                              help="Destination port: the service that was contacted."),
+    "Proto": st.column_config.TextColumn("Proto", width=64, help="Transport protocol (tcp, udp, icmp)."),
+    "State": st.column_config.TextColumn("State", width=72, help=ui.GLOSSARY["State"]),
+    "Event ID": st.column_config.TextColumn("Event ID", width=190,
+                                            help="Zeek uid of the connection; search it in other Zeek logs."),
+    "Src port": st.column_config.NumberColumn("Src port", format="%d"),
+    "Duration (s)": st.column_config.NumberColumn("Duration (s)"),
+    "Orig bytes": st.column_config.NumberColumn("Bytes out", format="%d", help="Payload bytes sent by the source."),
+    "Resp bytes": st.column_config.NumberColumn("Bytes in", format="%d", help="Payload bytes sent back."),
+}
+
+
+def supporting_evidence(dataset: dd.Dataset, alert: Alert) -> None:
+    st.html(ui.section_header("Supporting evidence", f"{alert.connection_count} connection(s) from the log, oldest "
+                              "first", hint_key="Supporting evidence"))
+    events = dd.supporting_events(dataset.connections, alert)
+    compact, date = dd.compact_evidence_times(events)
+    if date:
+        st.caption(f"All on {date} (UTC). Hover a column header for its meaning.")
+    # The key columns fit a laptop screen; every field stays one click away below.
+    st.dataframe(evidence_table(compact), hide_index=True, key="supporting_events",
+                 column_order=dd.EVIDENCE_PRIMARY, column_config=EVIDENCE_COLUMNS,
+                 height=min(35 * (len(compact) + 1) + 3, 400))
+    states = list(dict.fromkeys(events["State"].dropna()))
+    st.html(ui.state_legend(states))
+    with st.expander(f"All fields ({len(events.columns)} columns: ports, service, duration, bytes)",
+                     icon=":material/table_view:"):
+        st.dataframe(evidence_table(events), hide_index=True, key="supporting_events_all",
+                     column_config={k: v for k, v in EVIDENCE_COLUMNS.items() if k != "Time (UTC)"})
+        st.caption("None means Zeek did not record that value. Failed TCP states are shown in amber.")
+
+
 def investigation_page(dataset: dd.Dataset, alerts: list[Alert], store: inv.InvestigationStore) -> None:
     st.title("Alert investigation")
-    st.caption("Statuses and notes are kept only in this browser session: they are lost when you reload the "
-               "page or restart the app. Each dataset has its own investigation records.")
+    st.caption("Statuses and notes last for this browser session only (lost on reload or restart), "
+               "and are kept separately for each dataset.")
     if not alerts:
         st.html(ui.empty_state("Nothing to investigate",
                                "This dataset produced no alerts with the current detection settings."))
@@ -501,19 +558,15 @@ def investigation_page(dataset: dd.Dataset, alerts: list[Alert], store: inv.Inve
         st.toast(message, icon=":material/check_circle:")
 
     st.html(ui.alert_header(alert, store.status(alert.alert_id)))
-    st.html(ui.explanation_block(alert.explanation))
 
+    # Explanation and details on the left; triage actions start at the top of the right column.
     details, workflow = st.columns([1.55, 1], gap="large")
     with details:
         alert_details(alert)
     with workflow:
         workflow_panel(store, alert)
 
-    st.html(ui.section_header("Supporting evidence", "The connections from the log behind this alert"))
-    st.html(ui.evidence_facts(alert))
-    st.dataframe(evidence_table(dd.supporting_events(dataset.connections, alert)), hide_index=True,
-                 key="supporting_events")
-    st.caption("None means Zeek did not record that value. Failed TCP states are shown in amber.")
+    supporting_evidence(dataset, alert)
 
     orphaned = store.orphaned(list(by_id))
     if orphaned:

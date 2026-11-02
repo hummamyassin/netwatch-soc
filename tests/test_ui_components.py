@@ -82,6 +82,48 @@ class ComponentTests(unittest.TestCase):
         self.assertIn("4 hosts", html)
         self.assertIn("nw-badge--closed", html)
 
+    def test_glossary_terms_get_tooltips(self):
+        self.assertIn('title="Rejected: the target answered', ui.term("REJ"))
+        self.assertEqual(ui.term("Unknown thing"), "Unknown thing")
+        self.assertIn("<abbr", ui.key_value_list([("Severity", "High")]))
+        self.assertIn("<abbr", ui.panel_title("Protocol mix", "TCP vs UDP", note_terms=("TCP", "UDP")))
+        self.assertIn("<abbr", ui.section_header("Supporting evidence", hint_key="Supporting evidence"))
+        for key in ["REJ", "S0", "TCP", "UDP", "Severity", "Detection threshold", "Supporting evidence"]:
+            self.assertIn(key, ui.GLOSSARY)
+
+    def test_explanation_keeps_every_word_in_three_parts(self):
+        text = ("203.0.113.99 made 36 failed TCP connection attempts to 192.0.2.26:22 within 60 s (threshold: 10). "
+                "36 failed attempts from A to B; connection states: REJ=36 (S0 = no reply, REJ = rejected). "
+                "Possible causes include automated attempts. Or a client retrying.")
+        html = ui.explanation_block(text)
+        for label in ["Trigger", "Observed", "Context"]:
+            self.assertIn(f"<span>{label}</span>", html)
+        self.assertIn("192.0.2.26:22 within 60 s (threshold: 10).</p>", html)
+        self.assertIn("Possible causes include automated attempts. Or a client retrying.", html)
+
+    def test_short_explanation_has_only_a_trigger(self):
+        html = ui.explanation_block("One sentence only.")
+        self.assertIn("Trigger", html)
+        self.assertNotIn("Observed", html)
+
+    def test_state_legend_lists_present_states(self):
+        html = ui.state_legend(["REJ", "SF", "S0"])
+        self.assertIn("Rejected", html)
+        self.assertIn("No reply", html)
+        self.assertIn("Normal setup and close", html)
+        self.assertEqual(ui.state_legend([]), "")
+
+    def test_marker_legend(self):
+        html = ui.marker_legend(["High", "Low"])
+        self.assertIn("nw-swatch--high", html)
+        self.assertNotIn("nw-swatch--medium", html)
+
+    def test_alert_header_shows_route_service_and_facts(self):
+        html = ui.alert_header(make_alert(), "New")
+        self.assertIn("22 / tcp", html)
+        self.assertIn("NW-004-830a11442946", html)
+        self.assertIn("Connections <b>36</b>", html)
+
     def test_evidence_facts(self):
         html = ui.evidence_facts(make_alert())
         self.assertIn("Connections <b>36</b>", html)
