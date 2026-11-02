@@ -113,6 +113,20 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(metrics(at)["Total Connections"], "6")
         self.assertTrue(any("could not be parsed" in w.value for w in at.warning))
 
+    def test_log_with_only_bad_lines(self):
+        at = upload(start_app(), "bad.json", b'{"ts": "never"}\n{"broken\n')
+        self.assert_no_crash(at)
+        self.assertEqual(metrics(at)["Total Connections"], "0")
+        self.assertTrue(any("2 line(s) could not be parsed" in w.value for w in at.warning))
+        self.assertTrue(any("no valid connections" in i.value for i in at.info))
+        self.assertTrue(any("No alerts" in s.value for s in at.success))
+
+    def test_investigation_page_without_alerts(self):
+        at = upload(start_app(), "normal.log", (FIXTURES / "normal_traffic.log").read_bytes())
+        at.radio(key="page").set_value("Alert Investigation").run()
+        self.assert_no_crash(at)
+        self.assertTrue(any("No alerts to investigate" in s.value for s in at.success))
+
     def test_investigation_page_opens(self):
         at = start_app()
         at.radio(key="page").set_value("Alert Investigation").run()

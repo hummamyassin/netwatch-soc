@@ -3,6 +3,58 @@
 A running record of concepts learned while building NetWatch SOC.
 Add to it at the end of each milestone, in your own words.
 
+## The big picture: how data travels through NetWatch SOC
+
+1. Computers talk in **packets**. A capture tool records them into a
+   **PCAP** file, and **TShark** (Wireshark's command-line twin) can list them:
+   `pcap_inspect.py` does exactly that.
+2. Packets are too detailed for everyday monitoring, so **Zeek** groups them
+   into **connections** and writes one line per connection to **conn.log**.
+3. `zeek_conn.py` is the **parser**. It reads conn.log (TSV or JSON),
+   checks every value, and turns each good line into a `ConnRecord`. Bad
+   lines are reported, never silently used.
+4. `analyzer.py` puts the records into a **pandas** table and answers
+   "what does this traffic look like?": top talkers, ports, protocols,
+   connection states, bytes and a timeline.
+5. `detection.py` applies **detection rules**. When a pattern crosses a
+   **threshold** inside a time window, it creates an **alert** with a
+   **severity**, an explanation and the exact connections behind it.
+6. `dashboard.py` shows everything in a browser, and `investigation.py`
+   lets an analyst **triage** each alert: New → Investigating → Closed,
+   with notes and a final verdict (the disposition).
+
+Each module only talks to the next one, so every step can be tested on its
+own (see `docs/ARCHITECTURE.md` for the technical version).
+
+## Glossary
+
+| Term | Plain-English meaning |
+|------|-----------------------|
+| **Packet** | One small unit of data sent over a network, wrapped in layers: Ethernet → IP (addresses) → TCP/UDP (ports) → application data |
+| **PCAP / PCAPNG** | File formats that store recorded packets with timestamps. PCAPNG is the newer one Wireshark saves by default. Treat them as sensitive |
+| **Connection** | A conversation between two endpoints (IP + port on each side), from the first packet to the last. Zeek logs one line per connection |
+| **TCP** | Connection-oriented transport: a handshake first (SYN, SYN-ACK, ACK), then reliable, ordered delivery. Used by web, SSH, RDP... |
+| **UDP** | Connectionless "fire and forget" transport: no handshake, no delivery guarantee. Used by DNS, NTP, mDNS... |
+| **TShark** | The command-line version of Wireshark: reads captures and prints chosen packet fields |
+| **Zeek** | An open-source network security monitor that turns traffic into structured logs (conn.log, dns.log, http.log, ...) |
+| **conn.log** | Zeek's connection log: who talked to whom, ports, protocol, duration, bytes, packets, and how the connection ended (`conn_state`) |
+| **TSV** | Tab-Separated Values: a text table where columns are separated by tabs. Zeek's default log format, with `#` header lines |
+| **JSON** | JavaScript Object Notation: text made of `"key": value` pairs. Zeek can write one JSON object per line |
+| **Parser** | Code that reads raw text and turns it into structured, checked data, rejecting anything that does not fit |
+| **pandas** | A Python library for tables (DataFrames): counting, grouping, sorting and time-series work in a few lines |
+| **Detection rule** | A precise, written condition that marks activity as worth reviewing, e.g. "≥ 15 distinct ports on one host within 60 s" |
+| **Threshold** | The value a measurement must reach for a rule to fire. Too low: noise. Too high: missed activity |
+| **Time window** | How close together events must be to count together, e.g. "within 60 seconds" |
+| **Alert** | The output of a rule: what was seen, when, between which hosts, why it matters, and the evidence |
+| **False positive** | An alert on harmless activity, e.g. the IT team's vulnerability scanner looking like an attacker's port scan |
+| **True positive** | An alert on activity that really was malicious or unwanted |
+| **Severity** | How urgently an alert should be looked at (High / Medium / Low), based on how strong the signal is, not proof of damage |
+| **Alert triage** | Quickly deciding what an alert means and how much attention it needs: read it, check the evidence, decide |
+| **Disposition** | The analyst's conclusion when closing an alert: True Positive, False Positive, Benign / Expected Activity, Inconclusive |
+| **Incident investigation** | The deeper follow-up when an alert looks real: gather evidence, establish what happened and when, document it, recommend actions |
+| **SOC** | Security Operations Centre: the team (and tools) that monitors alerts and responds to incidents |
+| **Documentation IP ranges** | Address blocks reserved for examples (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24, 2001:db8::/32). They never belong to real hosts, so they are safe in test data |
+
 ---
 
 ## Milestone 1: Project foundation, PCAP and TShark
@@ -312,3 +364,39 @@ Add to it at the end of each milestone, in your own words.
   change the rule settings so it does not fire again?
 - What information would you need before closing the 4444 alert?
 - Why is it useful that the same data and settings always give the same alert ID?
+
+---
+
+## Final QA and portfolio preparation
+
+### What the final review found and fixed
+- **Duplicated helpers**: three slightly different timestamp formatters and
+  three copies of the "skipped lines" CLI warning became one of each. One
+  copy was even missing the "... and N more" summary. Duplicates drift apart;
+  shared helpers don't.
+- **An "illustrative" example that was never run**: the README showed packet
+  output typed from memory. It was replaced with real output from the tool
+  on a synthetic capture, and that capture became a test. Documentation
+  should show what the software actually does.
+- **Version claims need checking**: the README said Python 3.10+ would work,
+  but pandas 3 and Streamlit need 3.11+. The package metadata
+  (`Requires-Python`) settles it.
+
+### Security review checklist (and how this project answers it)
+- Secrets or credentials in Git? None. `.env`, keys and Streamlit secrets are ignored.
+- Personal data or real traffic? None tracked. Fixtures and demo data use
+  documentation IP ranges, and real captures/logs are ignored by `.gitignore`.
+- Unsafe file handling? Uploads are size- and type-checked, parsed in
+  memory, never written to disk or executed.
+- Unsafe subprocess use? Only TShark, from an argument list (no shell), with a timeout.
+- Path traversal? Uploaded file names are reduced to a display label and
+  never used as paths. Demo files come from a fixed list.
+- Dangerous deserialisation? Only `json.loads` on data. No pickle/YAML loading of user input.
+- Unnecessary network access? None at runtime: the dashboard binds to
+  localhost and Streamlit telemetry is off.
+- Exposure of investigation data? Notes stay in the browser session on this
+  computer. Note the trade-off: they are also lost on reload.
+
+### Questions to explore
+- Which of the limitations in the README would you fix first for a real SOC, and why?
+- How would you store investigation notes durably without adding a big database server?

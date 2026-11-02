@@ -34,8 +34,8 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 
-from netwatch.analyzer import ip_sort_key, load_log
-from netwatch.zeek_conn import MAX_ERRORS_SHOWN, ZeekLogError
+from netwatch.analyzer import format_ts, ip_sort_key, load_log
+from netwatch.zeek_conn import ZeekLogError, report_skipped_lines
 
 SEVERITIES = ("Low", "Medium", "High")  # least to most severe
 
@@ -234,10 +234,6 @@ def make_alert_id(rule_id: str, src_ip: str, dst_ip: str | None, first_seen: dat
     return f"{rule_id}-{hashlib.sha256(fingerprint.encode('utf-8')).hexdigest()[:12]}"
 
 
-def format_time(value: datetime) -> str:
-    return value.strftime("%Y-%m-%d %H:%M:%S UTC")
-
-
 def count_text(values: pd.Series) -> str:
     """'REJ=36, S0=2' style summary (most common first, ties alphabetical), or 'not recorded'."""
     counts = values.dropna().value_counts()
@@ -277,7 +273,7 @@ def _alert_from_events(rule_id: str, events: pd.DataFrame, *, severity: str, obs
 
 def _seen(events: pd.DataFrame) -> str:
     first, last = events["ts"].min(), events["ts"].max()
-    return f"from {format_time(first)} to {format_time(last)}"
+    return f"from {format_ts(first)} to {format_ts(last)}"
 
 
 # ---------------------------------------------------------------------------
@@ -457,7 +453,7 @@ def format_alert(number: int, alert: Alert, max_events: int = 5) -> str:
         f"    Destination:  {alert.dst_ip or f'{alert.destination_count} different hosts'}",
         f"    Protocol:     {', '.join(alert.protocols) or 'not recorded'}"
         f"   Ports ({len(alert.dst_ports)}): {ports or 'none recorded'}",
-        f"    Seen:         {format_time(alert.first_seen)} -> {format_time(alert.last_seen)}"
+        f"    Seen:         {format_ts(alert.first_seen)} -> {format_ts(alert.last_seen)}"
         f" ({alert.connection_count} connection(s))",
         f"    Measured:     {alert.observed_value} (threshold {alert.threshold}, window {window})",
         f"    Why:          {wrapped}",
@@ -533,11 +529,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     errors = loaded.result.errors
-    if errors:
-        print(f"Warning: skipped {len(errors)} line(s) that could not be parsed:", file=sys.stderr)
-        for message in errors[:MAX_ERRORS_SHOWN]:
-            print(f"  {message}", file=sys.stderr)
-        print(file=sys.stderr)
+    report_skipped_lines(errors)
 
     alerts = run_detection(loaded.connections, config)
     counts = severity_counts(alerts)

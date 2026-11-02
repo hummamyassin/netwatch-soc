@@ -15,15 +15,15 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Callable, Iterable
 
 import pandas as pd
 
 from netwatch import analyzer as an
+from netwatch.analyzer import format_ts  # one timestamp format everywhere: "YYYY-MM-DD HH:MM:SS UTC"
 from netwatch.detection import RULES, SEVERITIES, Alert, severity_counts
-from netwatch.investigation import NEW, STATUSES, Case
+from netwatch.investigation import NEW, Case
 from netwatch.zeek_conn import parse_conn_text
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -46,7 +46,7 @@ BINARY_SIGNATURES = {
 }
 
 SEVERITY_ICONS = {"High": "🔴", "Medium": "🟠", "Low": "🔵"}
-DEFAULT_STATUS = NEW  # STATUSES (New, Investigating, Closed) comes from netwatch.investigation
+DEFAULT_STATUS = NEW
 
 ALERT_TABLE_COLUMNS = ["Severity", "Status", "Alert type", "Source", "Destination", "Ports", "Protocol",
                        "First seen (UTC)", "Last seen (UTC)", "Connections", "Alert ID"]
@@ -130,10 +130,6 @@ def read_demo(label: str) -> tuple[bytes, str]:
 # ---------------------------------------------------------------------------
 # Formatting helpers
 # ---------------------------------------------------------------------------
-
-def format_ts(value: datetime | pd.Timestamp | None) -> str:
-    return "-" if value is None or pd.isna(value) else value.strftime("%Y-%m-%d %H:%M:%S UTC")
-
 
 _MARKDOWN_SPECIAL = re.compile(r"([\\`*_{}\[\]()#+\-.!|<>~$:])")
 

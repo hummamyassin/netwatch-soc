@@ -250,8 +250,59 @@ def write_synthetic_pcap(path: Path) -> None:
     path.write_bytes(global_header + record_header + frame)
 
 
+def write_mixed_pcap(path: Path) -> None:
+    """Write 6 made-up packets: DNS query, TCP SYN, SYN-ACK, ICMP ping, ARP, malformed DNS.
+
+    Documentation addresses only (192.0.2.0/24, 198.51.100.0/24); no real traffic.
+    """
+    mac_a, mac_b = b"\x02\x00\x00\x00\x00\x0a", b"\x02\x00\x00\x00\x00\x14"
+
+    def eth(payload: bytes, ethertype: int = 0x0800, src: bytes = mac_a, dst: bytes = mac_b) -> bytes:
+        return dst + src + struct.pack("!H", ethertype) + payload
+
+    def ip(src: str, dst: str, proto: int, payload: bytes) -> bytes:
+        return struct.pack("!BBHHHBBH4s4s", 0x45, 0, 20 + len(payload), 0, 0x4000, 64, proto, 0,
+                           bytes(map(int, src.split("."))), bytes(map(int, dst.split(".")))) + payload
+
+    def udp(sport: int, dport: int, data: bytes) -> bytes:
+        return struct.pack("!HHHH", sport, dport, 8 + len(data), 0) + data
+
+    def tcp(sport: int, dport: int, flags: int) -> bytes:
+        return struct.pack("!HHIIBBHHH", sport, dport, 1000, 0, 5 << 4, flags, 65535, 0, 0)
+
+    query = struct.pack("!HHHHHH", 0x1234, 0x0100, 1, 0, 0, 0) + b"\x07example\x03com\x00" + struct.pack("!HH", 1, 1)
+    arp = struct.pack("!HHBBH6s4s6s4s", 1, 0x0800, 6, 4, 1, mac_a, bytes([192, 0, 2, 10]), b"\x00" * 6,
+                      bytes([192, 0, 2, 1]))
+    packets = [
+        eth(ip("192.0.2.10", "192.0.2.53", 17, udp(53001, 53, query))),
+        eth(ip("192.0.2.10", "198.51.100.20", 6, tcp(50000, 443, 0x02))),
+        eth(ip("198.51.100.20", "192.0.2.10", 6, tcp(443, 50000, 0x12)), src=mac_b, dst=mac_a),
+        eth(ip("192.0.2.10", "198.51.100.1", 1, struct.pack("!BBHHH", 8, 0, 0, 1, 1) + b"ping")),
+        eth(arp, ethertype=0x0806, dst=b"\xff" * 6),
+        eth(ip("192.0.2.10", "192.0.2.53", 17, udp(53002, 53, b"\x12\x34\x01"))),  # truncated DNS
+    ]
+    records = b"".join(struct.pack("<IIII", 1741593600 + n, 0, len(p), len(p)) + p for n, p in enumerate(packets))
+    path.write_bytes(struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1) + records)
+
+
 @unittest.skipIf(pi.find_tshark() is None, "tshark not installed")
 class RealTsharkTests(TempDirTestCase):
+    def test_reads_mixed_synthetic_capture(self):
+        capture = self.tmp / "mixed.pcap"
+        write_mixed_pcap(capture)
+        output, warning = pi.run_tshark(pi.build_tshark_command(pi.find_tshark(), capture, 10))
+        rows = [(p.src_ip, p.dst_ip, p.protocol, p.src_port, p.dst_port, p.length)
+                for p in pi.parse_tshark_output(output)]
+        self.assertEqual(warning, "")
+        self.assertEqual(rows, [
+            ("192.0.2.10", "192.0.2.53", "DNS", "53001", "53", "71"),
+            ("192.0.2.10", "198.51.100.20", "TCP", "50000", "443", "54"),
+            ("198.51.100.20", "192.0.2.10", "TCP", "443", "50000", "54"),
+            ("192.0.2.10", "198.51.100.1", "ICMP", "-", "-", "46"),   # ICMP has no ports
+            ("-", "-", "ARP", "-", "-", "42"),                        # ARP has no IP header
+            ("192.0.2.10", "192.0.2.53", "DNS", "53002", "53", "45"),  # malformed, still labelled DNS
+        ])
+
     def test_reads_synthetic_capture(self):
         capture = self.tmp / "synthetic.pcap"
         write_synthetic_pcap(capture)

@@ -31,11 +31,11 @@ import pandas as pd
 from netwatch.pcap_inspect import positive_limit
 from netwatch.zeek_conn import (
     CONN_STATES,
-    MAX_ERRORS_SHOWN,
     ConnLogResult,
     ConnRecord,
     ZeekLogError,
     parse_conn_log,
+    report_skipped_lines,
 )
 
 # Zeek timestamps have microsecond precision, and everything is kept in UTC.
@@ -324,7 +324,13 @@ def human_span(seconds: float) -> str:
     return f"{hours}h {minutes:02d}m {secs:02d}s" if hours else f"{minutes}m {secs:02d}s"
 
 
-def format_ts(value: pd.Timestamp) -> str:
+def format_ts(value) -> str:
+    """'2025-03-10 08:20:00 UTC' for a UTC datetime or pandas Timestamp; '-' when missing.
+
+    Used for every timestamp the project shows (CLI reports, alerts, dashboard).
+    """
+    if value is None or pd.isna(value):
+        return "-"
     return value.strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
@@ -394,13 +400,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     errors = loaded.result.errors
-    if errors:
-        print(f"Warning: skipped {len(errors)} line(s) that could not be parsed:", file=sys.stderr)
-        for message in errors[:MAX_ERRORS_SHOWN]:
-            print(f"  {message}", file=sys.stderr)
-        if len(errors) > MAX_ERRORS_SHOWN:
-            print(f"  ... and {len(errors) - MAX_ERRORS_SHOWN} more", file=sys.stderr)
-        print(file=sys.stderr)
+    report_skipped_lines(errors)
 
     print(format_report(loaded, args.top))
     if loaded.connections.empty and errors:

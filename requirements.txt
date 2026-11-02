@@ -2,7 +2,8 @@
 # Install into a virtual environment (see README.md -> Setup):
 #   python -m pip install -r requirements.txt
 #
-# Tested with pandas 3.1.0, Streamlit 1.66.1 and Plotly 7.1.0 on Python 3.12 (Windows 11).
+# Needs Python 3.11 or newer. Tested with pandas 3.1.0, Streamlit 1.66.1 and
+# Plotly 7.1.0 on Python 3.12 (Windows 11).
 # A package is added here only in the milestone that first uses it.
 
 pandas>=3.0,<4        # Milestone 3: traffic analysis

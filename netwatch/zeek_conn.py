@@ -417,6 +417,22 @@ def format_table(records: list[ConnRecord]) -> str:
     return "\n".join(lines)
 
 
+def report_skipped_lines(errors: list[str], stream=None) -> None:
+    """Print the parser's messages for skipped lines (at most MAX_ERRORS_SHOWN), to stderr by default.
+
+    Shared by every command-line tool that reads conn.log files.
+    """
+    if not errors:
+        return
+    stream = stream or sys.stderr
+    print(f"Warning: skipped {len(errors)} line(s) that could not be parsed:", file=stream)
+    for message in errors[:MAX_ERRORS_SHOWN]:
+        print(f"  {message}", file=stream)
+    if len(errors) > MAX_ERRORS_SHOWN:
+        print(f"  ... and {len(errors) - MAX_ERRORS_SHOWN} more", file=stream)
+    print(file=stream)
+
+
 def format_state_legend(records: list[ConnRecord]) -> str:
     states = sorted({r.conn_state for r in records if r.conn_state})
     lines = ["Connection states shown above:"]
@@ -453,13 +469,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error: {error}", file=sys.stderr)
         return 1
 
-    if result.errors:
-        print(f"Warning: skipped {len(result.errors)} line(s) that could not be parsed:", file=sys.stderr)
-        for message in result.errors[:MAX_ERRORS_SHOWN]:
-            print(f"  {message}", file=sys.stderr)
-        if len(result.errors) > MAX_ERRORS_SHOWN:
-            print(f"  ... and {len(result.errors) - MAX_ERRORS_SHOWN} more", file=sys.stderr)
-        print(file=sys.stderr)
+    report_skipped_lines(result.errors)
 
     shown = result.records[:args.limit]
     print(f"File:    {result.path}")

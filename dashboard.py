@@ -269,7 +269,7 @@ def alerts_section(dataset: dd.Dataset, alerts: list[Alert], store: inv.Investig
     left, middle, right = st.columns(3)
     severities = left.multiselect("Severity", severity_options, default=severity_options, key="filter_severity")
     types = middle.multiselect("Alert type", type_options, default=type_options, key="filter_type")
-    statuses = right.multiselect("Status", list(dd.STATUSES), default=list(dd.STATUSES), key="filter_status")
+    statuses = right.multiselect("Status", list(inv.STATUSES), default=list(inv.STATUSES), key="filter_status")
 
     shown = dd.filter_alerts(alerts, severities, types, statuses, store.status)
     counts = store.status_counts([alert.alert_id for alert in alerts])
@@ -284,7 +284,6 @@ def alerts_section(dataset: dd.Dataset, alerts: list[Alert], store: inv.Investig
             "Ports": st.column_config.TextColumn(width="small"),
             "Protocol": st.column_config.TextColumn(width="small"),
             "Connections": st.column_config.NumberColumn(format="%d", width="small"),
-            "Status": st.column_config.TextColumn(width="small"),
             "Alert ID": st.column_config.TextColumn(width="medium"),
         },
     )

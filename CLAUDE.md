@@ -17,8 +17,8 @@ Optional later: Gemini API to *explain* existing alerts. Never use it to decide 
 4. Deterministic detection rules ✅ (`netwatch/detection.py`: NW-001..NW-004 → `Alert`; docs/DETECTION_RULES.md)
 5. Streamlit SOC dashboard ✅ (`dashboard.py` UI + `netwatch/dashboard_data.py` data prep)
 6. Alert investigation workflow ✅ (`netwatch/investigation.py` + investigation page)
-7. Optional AI explanations (Gemini)
-8. Testing and GitHub polish
+7. Optional AI explanations (Gemini) ⏳ not started: needs the owner's explicit OK
+8. Testing and GitHub polish ✅ (final QA, security review, docs, screenshots)
 
 Do not start the next milestone, or add its features early, without the owner's explicit OK.
 
@@ -80,7 +80,13 @@ tests with `.venv\Scripts\python`. `pcap_inspect.py` and `zeek_conn.py` stay std
   real-tool tests must `skipIf` the tool is missing. Test data is synthetic, in
   `tests/fixtures/`, using documentation IP ranges only (192.0.2.0/24, 198.51.100.0/24,
   203.0.113.0/24, 2001:db8::/32).
-- Target OS: Windows 11 (also keep Linux/macOS working).
+- Shared helpers: one timestamp format (`analyzer.format_ts`, "YYYY-MM-DD HH:MM:SS UTC"),
+  one skipped-lines warning (`zeek_conn.report_skipped_lines`). CLI output stays ASCII.
+- Target OS: Windows 11 (also keep Linux/macOS working). Python 3.11+.
 
 ## Docs
-Keep `README.md` (capabilities + roadmap) and `docs/LEARNING_LOG.md` updated each milestone.
+- `README.md`: portfolio overview (architecture, features, quick start, limitations, roadmap).
+- `docs/USAGE.md` (CLI guide), `docs/ARCHITECTURE.md` (modules, data flow, decisions),
+  `docs/DETECTION_RULES.md` (rules, severity, false positives), `docs/LEARNING_LOG.md`
+  (glossary + what was learned per milestone). Examples in docs must be real tool output.
+- Screenshots in `docs/screenshots/` show synthetic demo data only.

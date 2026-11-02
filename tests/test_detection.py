@@ -10,7 +10,6 @@ and regression tests pin behaviour that must not change silently.
 import contextlib
 import io
 import random
-import re
 import tempfile
 import unittest
 from dataclasses import replace

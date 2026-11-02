@@ -1,88 +1,95 @@
 # NetWatch SOC: Network Security Monitor & Incident Dashboard
 
-A beginner-friendly network security monitoring project. NetWatch SOC reads
-**recorded** network traffic (PCAP files), turns it into structured logs,
-runs simple, explainable detection rules over those logs, and shows the
-resulting alerts in a SOC-style dashboard.
+NetWatch SOC analyses **recorded** network traffic the way a Security
+Operations Centre (SOC) analyst would: it turns Zeek connection logs into a
+clean dataset, runs transparent detection rules, and presents the resulting
+alerts in a dashboard with an investigation workflow.
 
-It is built step by step as a learning and portfolio project for Junior SOC
-Analyst, Cybersecurity Trainee, IT Security and Networking roles.
+It is an educational portfolio project built step by step by a Computer
+Engineering graduate preparing for Junior SOC Analyst, Cybersecurity Trainee
+and IT Security roles. Everything runs offline on your own computer, and a
+synthetic demo dataset lets you try it without any real capture.
 
+![NetWatch SOC dashboard: KPI cards and connections over time](docs/screenshots/dashboard-overview.png)
+
+> **Scope:** NetWatch SOC analyses files you already have. It does not
+> capture live traffic, scan networks, generate attacks or block anything.
+> Its alerts describe *possible* suspicious behaviour for a human to review,
+> not confirmed attacks.
+
+## Contents
+
+- [Architecture](#architecture)
+- [Features](#features)
+- [Quick start (Windows)](#quick-start-windows)
+- [Prerequisites: TShark and Zeek](#prerequisites-tshark-and-zeek)
+- [Command-line tools](#command-line-tools)
+- [Dashboard](#dashboard)
+- [Detection rules](#detection-rules)
+- [Example workflow](#example-workflow)
+- [Screenshots](#screenshots)
+- [Testing](#testing)
+- [Security and privacy](#security-and-privacy)
+- [Limitations](#limitations)
+- [Roadmap](#roadmap)
+- [Learning objectives](#learning-objectives)
+- [Project structure](#project-structure)
+
+## Architecture
+
+```mermaid
+flowchart LR
+    PCAP[("PCAP / PCAPNG<br/>recorded traffic")] -->|TShark| PI["Packet preview<br/>pcap_inspect.py"]
+    PCAP -->|Zeek| LOG[("Zeek conn.log<br/>TSV or JSON")]
+    LOG --> ZC["Parser<br/>zeek_conn.py"]
+    ZC --> AN["Log analyzer<br/>analyzer.py (pandas)"]
+    AN --> DET["Rule-based detection<br/>detection.py"]
+    DET --> ALERTS(["Security alerts"])
+    ALERTS --> UI["Streamlit dashboard<br/>dashboard.py"]
+    UI --> INV["Alert investigation<br/>investigation.py"]
 ```
-PCAP ──► Wireshark / Zeek ──► Structured logs ──► Python detection rules ──► Alerts ──► Streamlit dashboard
-```
 
-> **Scope:** NetWatch SOC only analyses capture files you already have. It does
-> not capture live traffic, scan networks, or generate attacks.
+1. **Packets.** Wireshark/TShark show individual packets. `pcap_inspect.py` previews a capture.
+2. **Connections.** Zeek summarises packets into one line per connection (`conn.log`).
+3. **Parsing.** `zeek_conn.py` reads TSV or JSON logs, validates every
+   field and skips bad lines, reporting each one.
+4. **Analysis.** `analyzer.py` builds a typed pandas DataFrame and computes
+   statistics: top talkers, ports, protocols, states, bytes and a timeline.
+5. **Detection.** `detection.py` applies four deterministic rules and
+   explains every alert from the data and the thresholds.
+6. **Dashboard and investigation.** `dashboard.py` shows KPIs, charts and
+   alerts. Analysts move alerts through New → Investigating → Closed.
 
----
+Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## Objectives
+## Features
 
-- Learn how network traffic looks at the packet level (Wireshark / TShark).
-- Learn how a network security monitor (Zeek) summarises traffic into logs.
-- Analyse those logs with Python and pandas.
-- Write **deterministic** detection rules: the same input always gives the
-  same alert, and every alert can be explained.
-- Present alerts in a dashboard and practise an analyst's investigation workflow.
+| Area | What you get |
+|------|--------------|
+| PCAP inspection | Readable packet preview via TShark: time (UTC), IPs, protocol, ports, length. Handles ICMP/ARP and missing fields |
+| Zeek parsing | TSV and JSON `conn.log` → identical validated records. Strict checks on IPs, ports, counts and text fields. Bad lines reported with line numbers |
+| Traffic analysis | pandas statistics: totals, unique IPs, TCP/UDP mix, top sources, top destination ports, connection states, bytes, durations, connections over time |
+| Detection | Possible port scan, high connection rate, watchlisted destination port, repeated failed connections. Configurable thresholds, sliding windows, stable alert IDs, documented false positives |
+| Dashboard | Dark SOC-style Streamlit app: KPI cards, five Plotly charts, filterable alerts table, uploads, detection settings |
+| Investigation | Alert details, rule explanation, supporting connections, status workflow, notes, closure dispositions, history |
+| Demo data | 450 synthetic connections (TSV + JSON) with six scenarios, built from documentation-only IP addresses |
+| Quality | Unit, integration and headless UI tests. Deterministic results. No secrets or real traffic in the repository |
 
-## Current capabilities (Milestones 1–6)
+## Quick start (Windows)
 
-- `netwatch/pcap_inspect.py`: prints a readable preview of the first packets
-  in a `.pcap` / `.pcapng` file: time, source/destination IP, protocol,
-  ports and length. It uses the `tshark` program that ships with Wireshark.
-- `netwatch/zeek_conn.py`: reads a Zeek `conn.log` in either **TSV** or
-  **JSON** format and turns every connection into the same clean Python
-  record (real timestamps, validated IPs, numbers instead of strings, `None`
-  for missing values). Bad lines are skipped and reported with their line
-  number. Includes a small CLI preview.
-- `netwatch/analyzer.py`: loads connections into a **pandas** DataFrame and
-  summarises them: totals, unique IPs, protocol mix, top sources, top
-  destination ports, connection states, bytes, durations and connections
-  over time. Missing values are never counted as zero.
-- `netwatch/detection.py`: four deterministic, explainable detection rules
-  (possible port scan, high connection rate, watchlisted destination port,
-  repeated failed connections) that produce alerts with stable IDs, severity,
-  thresholds, explanations and supporting connection references.
-- A synthetic demo dataset in `data/demo/` (450 connections, TSV and JSON)
-  and synthetic test fixtures in `tests/fixtures/zeek/`, so everything can be
-  tried and tested without real captures or Zeek.
-- `dashboard.py`: a dark SOC-style **Streamlit** dashboard with KPI cards,
-  Plotly charts and a filterable alerts table. It uses the real analyzer and
-  detection engine on the demo data or on an uploaded Zeek log.
-- `netwatch/investigation.py` + the dashboard's **Alert Investigation** page:
-  a New → Investigating → Closed triage workflow with notes, closure
-  dispositions and history, kept separately for each dataset.
-- Unit tests for all tools, plus headless UI tests for the dashboard.
-
-## Roadmap
-
-| # | Milestone | What gets built / learned |
-|---|-----------|---------------------------|
-| 1 | **Networking, PCAP, Wireshark** ✅ | Project setup; read packets from a capture with TShark |
-| 2 | **Zeek logs** ✅ | Parse Zeek `conn.log` (TSV and JSON) into normalised connection records |
-| 3 | **Python log analysis** ✅ | Load Zeek logs into pandas, summarise hosts, ports, protocols, states, bytes, time |
-| 4 | **Deterministic detection rules** ✅ | Port scan, connection rate, watchlisted ports, repeated failures; explainable alerts |
-| 5 | **Streamlit SOC dashboard** ✅ | KPI cards, Plotly charts, alerts table with filters, uploads, detection settings |
-| 6 | **Alert investigation workflow** ✅ | Alert details, supporting connections, status, notes, dispositions |
-| 7 | Optional AI explanations | Gemini API *explains* an existing alert. It never decides what is an alert |
-| 8 | Testing and GitHub polish | More tests, screenshots, clean README, demo data |
-
----
-
-## Setup
-
-### 1. Python
-
-You need Python 3.10 or newer. Check with:
+You need **Python 3.11 or newer** (tested with 3.12; pandas 3 and
+Streamlit require 3.11+) and Git. In PowerShell:
 
 ```bash
-python --version
+git clone https://github.com/hummamyassin/netwatch-soc.git
 ```
 
-Create a virtual environment (an isolated folder for this project's
-packages, so nothing is installed into your system Python), then install
-the packages from `requirements.txt` into it:
+```bash
+cd netwatch-soc
+```
+
+Create a virtual environment (a private folder for this project's
+packages), then install pandas, Streamlit and Plotly into it:
 
 ```bash
 python -m venv .venv
@@ -92,415 +99,101 @@ python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 ```
 
-On macOS/Linux use `.venv/bin/python` instead of `.venv\Scripts\python`.
-You can also activate the environment (`.venv\Scripts\Activate.ps1` in
-PowerShell, `source .venv/bin/activate` on macOS/Linux) and then simply type
-`python`. The commands below assume an activated environment.
-
-### 2. Wireshark and TShark
-
-- **Wireshark** is the graphical program for looking at packets.
-- **TShark** is its command-line version. This project calls TShark from Python.
-
-**Windows**
-
-1. Download the installer from <https://www.wireshark.org/download.html>.
-2. During install, keep the **TShark** component ticked (it is by default).
-3. **Npcap** is only needed to capture live traffic. This project only reads
-   files, so you can skip it.
-4. The installer usually does not add TShark to `PATH`. The script also checks
-   `C:\Program Files\Wireshark\tshark.exe` automatically. To use `tshark`
-   in your own terminal, add `C:\Program Files\Wireshark` to your `PATH`.
-
-Or install from the command line with winget:
+Run the tests, then start the dashboard with the built-in demo data:
 
 ```bash
-winget install WiresharkFoundation.Wireshark
-```
-
-**Ubuntu / Debian.** TShark is a separate package:
-
-```bash
-sudo apt install tshark
-```
-
-If it asks whether non-superusers should be able to capture packets, answer
-**No**. Reading files does not need it.
-
-**macOS**
-
-```bash
-brew install wireshark
-```
-
-**Check it works:**
-
-```bash
-tshark --version
-```
-
-### 3. Get a training capture (PCAP)
-
-Only use captures from trusted, legitimate training sources. **Never commit
-capture files to Git.** They can contain private data. The `.gitignore`
-already blocks `*.pcap` and `*.pcapng`.
-
-Good starting points:
-
-- **Wireshark Sample Captures**: <https://wiki.wireshark.org/SampleCaptures>.
-  Small, well-labelled captures of normal protocols (HTTP, DNS, DHCP, …).
-  Start here.
-- **Netresec, Publicly available PCAP files**:
-  <https://www.netresec.com/?page=PcapFiles>. A curated list of larger
-  datasets for later milestones.
-- **Malware-Traffic-Analysis.net**: real malware traffic for later practice.
-  The ZIPs are password-protected because they can contain live malware.
-  Only extract them inside an isolated lab VM, and only after you are
-  comfortable with the basics.
-
-Save files into `data/pcaps/`. That folder is ignored by Git.
-
----
-
-## Usage
-
-Run from the project folder:
-
-```bash
-python -m netwatch.pcap_inspect data/pcaps/http.cap
-```
-
-Show more or fewer packets with `--limit` (1–1000, default 20):
-
-```bash
-python -m netwatch.pcap_inspect data/pcaps/http.cap --limit 5
-```
-
-Help:
-
-```bash
-python -m netwatch.pcap_inspect --help
-```
-
-### Understanding the output
-
-Example (illustrative):
-
-```
-File: C:\...\data\pcaps\http.cap
-Showing 3 packet(s) (limit 3)
-
-   #  Time                         Source                  Destination             Protocol    SrcPort  DstPort  Length
------------------------------------------------------------------------------------------------------------------------
-   1  2004-05-13 10:17:07.311 UTC  145.254.160.237         65.208.228.223          TCP            3372       80      62
-   2  2004-05-13 10:17:08.222 UTC  65.208.228.223          145.254.160.237         TCP              80     3372      62
-   3  2004-05-13 10:17:08.222 UTC  145.254.160.237         65.208.228.223          TCP            3372       80      54
-```
-
-| Column | Meaning |
-|--------|---------|
-| `#` | Packet number in this preview |
-| `Time` | When the packet was recorded, in UTC |
-| `Source` / `Destination` | IPv4 or IPv6 address that sent / received the packet |
-| `Protocol` | Highest protocol layer TShark recognised (e.g. `TCP`, `DNS`, `HTTP`, `ARP`). Unidentified payload (`data`) is skipped, as in Wireshark |
-| `SrcPort` / `DstPort` | TCP or UDP port. Well-known ports identify services (80 = HTTP, 443 = HTTPS, 53 = DNS) |
-| `Length` | Size of the whole packet on the wire, in bytes |
-
-A `-` means the field doesn't apply to that packet. For example, ICMP (ping)
-has no ports, and ARP has no IP addresses.
-
-Exit codes: `0` success, `1` a clear error (file missing, TShark missing,
-unreadable file), `2` invalid command-line arguments.
-
----
-
-## Zeek conn.log parser (Milestone 2)
-
-### What Zeek and conn.log are
-
-**Zeek** is an open-source network security monitor. Instead of showing every
-packet like Wireshark, it groups packets into **connections** and writes
-summary logs. `conn.log` has one line per connection: who talked to whom, on
-which port and protocol, for how long, how much data moved, and how the
-connection ended. SOC analysts read these logs far more often than raw packets.
-
-### Try it now (no Zeek needed)
-
-The repository includes two small synthetic logs:
-
-```bash
-python -m netwatch.zeek_conn tests/fixtures/zeek/conn_tsv.log
+.venv\Scripts\python -m unittest
 ```
 
 ```bash
-python -m netwatch.zeek_conn tests/fixtures/zeek/conn_json.log --limit 3
+.venv\Scripts\python -m streamlit run dashboard.py
 ```
 
-Output:
+Your browser opens <http://localhost:8501>. Stop the dashboard with
+`Ctrl+C` in the terminal.
 
-```
-File:    C:\...\tests\fixtures\zeek\conn_tsv.log
-Format:  Zeek TSV
-Parsed:  6 connection(s), 0 line(s) skipped
-Showing: 6 of 6
+> Tip: activate the environment once per terminal with
+> `.venv\Scripts\Activate.ps1` and you can type `python` and `streamlit`
+> directly. If PowerShell blocks the script, keep using the
+> `.venv\Scripts\python ...` form shown above. On macOS/Linux use
+> `.venv/bin/python` and `source .venv/bin/activate`.
 
-   #  Time (UTC)               Proto  Source                  Destination             Service    Duration  OrigBytes  RespBytes  OrigPkts  RespPkts  State
------------------------------------------------------------------------------------------------------------------------------------------------------------
-   1  2023-11-14 22:13:20.000  tcp    192.0.2.10:49152        198.51.100.20:80        http          1.250        512       2048         8         7  SF
-   2  2023-11-14 22:13:21.500  udp    192.0.2.10:53001        192.0.2.53:53           dns           0.020         40        120         1         1  SF
-   3  2023-11-14 22:13:22.250  tcp    192.0.2.10:49153        203.0.113.5:22          -                 -          -          -         1         0  S0
-   4  2023-11-14 22:13:23.000  tcp    192.0.2.10:49154        203.0.113.5:23          -             0.001          0          0         1         1  REJ
-   5  2023-11-14 22:13:24.000  icmp   192.0.2.10              198.51.100.20           -             0.030         56         56         1         1  OTH
-   6  2023-11-14 22:13:25.750  udp    [2001:db8::10]:5353     [2001:db8::fb]:5353     dns           0.100         60          0         1         0  S0
+## Prerequisites: TShark and Zeek
 
-Connection states shown above:
-  OTH     No SYN seen (midstream traffic or not TCP)
-  REJ     Attempt rejected
-  S0      Attempt seen, no reply
-  SF      Normal setup and close
-```
+Both are **optional**. The dashboard, analyzer and detection work on the
+bundled demo data without them.
 
-### Reading the output
+**TShark** (for `pcap_inspect.py`) comes with Wireshark:
 
-| Column | Zeek field | Meaning |
-|--------|-----------|---------|
-| `Time (UTC)` | `ts` | When the connection started |
-| `Proto` | `proto` | Transport protocol: `tcp`, `udp` or `icmp` |
-| `Source` | `id.orig_h` / `id.orig_p` | The **originator**, the side that started the connection |
-| `Destination` | `id.resp_h` / `id.resp_p` | The **responder** |
-| `Service` | `service` | Application protocol Zeek recognised (`http`, `dns`, `ssl`, …) |
-| `Duration` | `duration` | Seconds from first to last packet |
-| `OrigBytes` / `RespBytes` | `orig_bytes` / `resp_bytes` | Payload bytes sent by each side |
-| `OrigPkts` / `RespPkts` | `orig_pkts` / `resp_pkts` | Packets sent by each side |
-| `State` | `conn_state` | How the connection went (see below) |
+- **Windows:** install Wireshark from <https://www.wireshark.org/download.html>
+  (keep the TShark component ticked; Npcap is only needed for live capture,
+  which this project does not do), or run `winget install WiresharkFoundation.Wireshark`.
+  The tool also finds `C:\Program Files\Wireshark\tshark.exe` when it is not on `PATH`.
+- **Ubuntu/Debian:** `sudo apt install tshark` (answer *No* to letting
+  non-superusers capture packets). **macOS:** `brew install wireshark`.
+- Check: `tshark --version`.
 
-`-` means Zeek did not record that value. For example, an `S0` connection got
-no reply, so it has no duration or byte counts. ICMP has no ports. Zeek stores
-the ICMP type/code in the port columns, and the parser moves them to separate
-`icmp_type` / `icmp_code` fields so they are never mistaken for ports.
-
-Common connection states:
-
-| State | Meaning | Why an analyst cares |
-|-------|---------|----------------------|
-| `SF` | Normal setup and close | Ordinary, completed traffic |
-| `S0` | Attempt seen, no reply | Many of these can mean scanning or a dead host |
-| `REJ` | Attempt rejected | The port is closed. Many in a row can mean scanning |
-| `RSTO` / `RSTR` | One side reset the connection | Aborted connections |
-| `OTH` | No TCP handshake seen | Midstream captures, ICMP, odd traffic |
-
-The full list is in `CONN_STATES` in `netwatch/zeek_conn.py`.
-
-### Using the parser from Python
-
-```python
-from netwatch.zeek_conn import parse_conn_log
-
-result = parse_conn_log("tests/fixtures/zeek/conn_tsv.log")
-print(result.log_format)             # "tsv"
-for conn in result.records:          # list of ConnRecord
-    print(conn.src_ip, conn.dst_port, conn.conn_state)
-print(result.errors)                 # e.g. ["line 12: field 'orig_bytes': not a whole number: 'x'"]
-```
-
-- **Bad lines** (invalid IP, wrong column count, non-numeric bytes, broken
-  JSON) are skipped and listed in `result.errors`, and the good lines are
-  still returned.
-- **Whole-file problems** raise `ZeekLogError`. Examples: the file is
-  missing or empty, the format is unknown, it has no `#fields` header, or it
-  is a different log such as `dns.log`.
-- CLI exit codes: `0` connections parsed (even if some lines were skipped),
-  `1` file error or no valid connections, `2` invalid arguments.
-
-### Generating a real conn.log later (optional)
-
-You don't need Zeek for this milestone. When you want real logs:
-
-- Zeek has **no official native Windows build**. On Windows, use **WSL2**
-  (Ubuntu) or a Linux VM. Install instructions:
-  <https://docs.zeek.org/en/master/install.html>
-- Run Zeek on a training PCAP inside an empty folder:
-
-  ```bash
-  zeek -C -r http.cap
-  ```
-
-  `-r` reads a file (no live capture) and `-C` ignores bad checksums, which
-  are common in captures. Zeek writes `conn.log`, `dns.log`, `http.log`, …
-  into the current folder.
-- For JSON output instead of TSV:
-
-  ```bash
-  zeek -C -r http.cap LogAscii::use_json=T
-  ```
-
-Keep real logs in `data/zeek_logs/`. Git ignores that folder.
-
-Text fields (`uid`, `proto`, `service`, `conn_state`, `history`) may only
-contain the characters Zeek itself writes. A line with anything else (for
-example terminal escape codes or Markdown links) is skipped and reported,
-so hostile values never reach reports or the dashboard.
-
----
-
-## Traffic analysis with pandas (Milestone 3)
-
-`netwatch/analyzer.py` turns the parsed connections into a pandas
-**DataFrame** (a table with typed columns) and answers the first questions an
-analyst asks about a log: how much traffic, between whom, on which ports,
-and how did the connections end?
+**Zeek** (to turn your own PCAPs into `conn.log`) has no official native
+Windows build. Use **WSL2** (Ubuntu) or a Linux VM and follow
+<https://docs.zeek.org/en/master/install.html>. Then, in an empty folder:
 
 ```bash
-python -m netwatch.analyzer tests/fixtures/zeek/conn_tsv.log --top 5
+zeek -C -r capture.pcap
 ```
 
-Output (shortened):
+`-r` reads a file (no live capture) and `-C` ignores bad checksums, which
+are common in captures. Zeek writes `conn.log` (and `dns.log`, `http.log`,
+...) into the folder. For JSON output add `LogAscii::use_json=T`. Keep real
+logs in `data/zeek_logs/` and real captures in `data/pcaps/`. Git ignores both.
 
+**Training captures:** use trusted sources such as the
+[Wireshark sample captures](https://wiki.wireshark.org/SampleCaptures)
+(small, well labelled, a good start) or the curated list at
+[Netresec](https://www.netresec.com/?page=PcapFiles). Malware captures
+(e.g. Malware-Traffic-Analysis.net) are password-protected ZIPs for a
+reason: only open them in an isolated lab VM.
+
+## Command-line tools
+
+```bash
+python -m netwatch.pcap_inspect data/pcaps/capture.pcapng --limit 15
 ```
-Connections:     6 (0 line(s) skipped, 0 duplicate(s) removed)
-Time range:      2023-11-14 22:13:20 UTC -> 2023-11-14 22:13:25 UTC (5.8 s)
-Source IPs:      2 unique
-Destination IPs: 4 unique
-Bytes sent:      668 B by originators (5 of 6 connections recorded), 2.2 KB by responders (5 of 6 recorded)
-Avg duration:    0.280 s (5 of 6 connections recorded)
 
-Protocols
-proto  connections  percent
-  tcp            3     50.0
-  udp            2     33.3
- icmp            1     16.7
-...
+```bash
+python -m netwatch.zeek_conn data/demo/conn_demo.log --limit 10
 ```
 
-| Function | Answers |
-|----------|---------|
-| `total_connections`, `unique_source_ips`, `unique_destination_ips` | How big is the log, how many hosts are involved? |
-| `protocol_distribution` | TCP vs UDP vs ICMP mix, with percentages |
-| `top_source_ips` | Which hosts started the most connections? |
-| `top_destination_ports` | Which services were contacted most? Counted per protocol (`53/udp` ≠ `53/tcp`) |
-| `connection_state_distribution` | How did connections end (`SF`, `S0`, `REJ`, ...)? |
-| `byte_totals`, `duration_stats` | How much data moved, how long connections lasted |
-| `connections_over_time` | Activity per time bucket (UTC), with quiet periods shown as 0 |
-
-Design rules:
-
-- **Missing is not zero.** A connection without a byte count is left out of
-  the byte total, and the report says how many connections were included
-  ("5 of 6 recorded").
-- **UTC everywhere.** All timestamps are stored as UTC.
-- **Deterministic order.** Ties in top-N tables are broken by IP address
-  (numerically) or port number, so the same log always gives the same table.
-- **No double counting.** A connection that appears twice (same Zeek `uid`,
-  for example a log appended to itself) is counted once and reported as a
-  removed duplicate.
-- **One shape for both formats.** TSV and JSON logs produce identical DataFrames.
-
----
-
-## Detection rules (Milestone 4)
-
-`netwatch/detection.py` turns connections into **alerts** using four simple,
-deterministic rules. The same log with the same settings always gives the
-same alerts with the same IDs, and every alert explains itself from the data
-and the thresholds. No AI is involved in deciding what is an alert.
-
-| ID | Alert type | Triggers when (default settings) | Base severity |
-|----|------------|----------------------------------|---------------|
-| NW-001 | Possible Port Scan | one source contacts ≥ 15 distinct ports on the same host within 60 s | Medium |
-| NW-002 | High Connection Rate | one source starts ≥ 100 connections within 60 s | Low |
-| NW-003 | Suspicious Destination Port | traffic reaches a watchlisted port (23, 3389, 4444, 5900, 6667, 31337) | Low |
-| NW-004 | Repeated Failed Connections | ≥ 10 rejected/unanswered TCP attempts to the same service within 60 s | Medium |
-
-Severity goes up one level when the measured value is at least 3 × the
-threshold. **Alerts describe possible suspicious behaviour, not confirmed
-attacks**, and each rule has documented false positives. The full reference
-(windows, failed states, severity, tuning, false positives) is in
-[docs/DETECTION_RULES.md](docs/DETECTION_RULES.md).
-
-Try it on the synthetic demo data:
+```bash
+python -m netwatch.analyzer data/demo/conn_demo.log --top 5
+```
 
 ```bash
 python -m netwatch.detection data/demo/conn_demo.log
 ```
 
-```
-Alerts:  6 (High 2, Medium 1, Low 3)
-
-[2] HIGH   NW-001 Possible Port Scan   (NW-001-a9bbeb729a3d)
-    Source:       203.0.113.66
-    Destination:  192.0.2.20
-    Protocol:     tcp   Ports (60): 1, 7, 9, 13, 21, 22, 23, 25, 26, 37, 53, 79, 80, 81, 88 ...
-    Seen:         2025-03-10 08:20:00 UTC -> 2025-03-10 08:20:23 UTC (60 connection(s))
-    Measured:     60 (threshold 15, window 60 s)
-    Why:          203.0.113.66 contacted 60 different TCP ports on 192.0.2.20 within 60 s ...
-```
-
-Change thresholds or pick rules from the command line:
-
 ```bash
 python -m netwatch.detection data/demo/conn_demo.log --scan-ports 50 --rules NW-001,NW-004
 ```
 
-With 50 instead of 15 ports the scan alert is still raised, but as Medium
-instead of High (60 ports is no longer ≥ 3 × the threshold).
+Sample output and an explanation of every column: [docs/USAGE.md](docs/USAGE.md).
 
-The demo dataset and what it contains are described in
-[data/demo/README.md](data/demo/README.md). It is made by
-`scripts/generate_demo_data.py` (fixed seed, documentation IPs only).
-
----
-
-## SOC dashboard (Milestone 5)
-
-Start the dashboard from the project folder (virtual environment active):
+## Dashboard
 
 ```bash
 streamlit run dashboard.py
 ```
 
-Your browser opens <http://localhost:8501>. Press `Ctrl+C` in the terminal to stop it.
-
-What you get:
-
-- **Sidebar:** the demo dataset (TSV or JSON) or your own Zeek `conn.log`
-  upload, detection settings for every rule (applied with one button), and
-  navigation.
-- **KPI cards:** total connections, unique source/destination IPs, total
-  alerts and alerts per severity.
-- **Network analysis:** connections over time, top source IPs, top
-  destination ports, TCP vs UDP distribution, connection states.
-- **Security alerts:** a table with severity, status, type, source,
-  destination, ports, first/last seen (UTC) and connection count, filterable
-  by severity, type and status.
-
-Everything on screen is computed by the tested `netwatch` package. The UI
-file contains no detection or analysis logic. Results are cached, so
-changing a filter does not re-parse the log or re-run detection.
-
-**Uploads:** `.log`, `.json`, `.tsv` or `.txt`, up to 20 MB. Files are parsed
-in memory and never saved or executed. Binary files (for example a PCAP
-uploaded by mistake) are refused with a helpful message, and empty or
-malformed logs show clear errors instead of crashing.
-
-**Privacy settings** (`.streamlit/config.toml`): the app only listens on
-`localhost` (other computers on your network cannot open it), and
-Streamlit's usage statistics are turned off.
-
----
-
-## Alert investigation (Milestone 6)
-
-Select an alert in the dashboard's table and press **Investigate**, or open
-**Alert Investigation** in the sidebar and pick an alert. The page shows:
-
-- **Details:** alert ID, type, severity, source and destination, protocol
-  and ports, first and last seen (UTC), number of related connections, the
-  rule that fired, its threshold and what was measured.
-- **Why this alert was raised:** the rule's plain-English explanation, plus
-  the rule's description and common false positives.
-- **Supporting connection events:** the exact connections from the log
-  behind the alert.
-- **Investigation panel:** the triage workflow.
+- **Sidebar:** choose the demo dataset (TSV or JSON) or upload your own Zeek
+  `conn.log` (`.log`, `.json`, `.tsv`, `.txt`, up to 20 MB), adjust every
+  rule's thresholds and press **Apply settings**, and switch pages.
+- **Dashboard page:** KPI cards (connections, unique source and destination
+  IPs, alerts by severity), connections over time, top source IPs, top
+  destination ports, TCP vs UDP, connection states, and the **Security
+  Alerts** table with severity, type and status filters.
+- **Alert Investigation page:** select a row in the alerts table and press
+  **Investigate** (or pick an alert). Review the details, the rule's
+  explanation and false positives and the supporting connections, then
+  record your work:
 
 ```
 New ──Start investigation──► Investigating ──Close (with disposition)──► Closed
@@ -508,67 +201,167 @@ New ──Start investigation──► Investigating ──Close (with dispositi
                                    └──────────────── Reopen ───────────────┘
 ```
 
-| Disposition | Meaning |
-|-------------|---------|
-| True Positive | The activity really was malicious or unwanted |
-| False Positive | The rule fired on activity it should not have matched |
-| Benign / Expected Activity | The rule worked, but the activity is known and allowed |
-| Inconclusive | Not enough information to decide |
+Dispositions: **True Positive**, **False Positive**, **Benign / Expected
+Activity**, **Inconclusive**. Notes and status changes are timestamped (UTC)
+in the case history.
 
-Notes can be added while an alert is being investigated. Closing requires a
-disposition and can include a closing note. Every action is recorded in the
-case history with a UTC timestamp. Statuses also appear in the dashboard's
-alerts table and status filter.
+> **Investigation state is not durable.** It lives in Streamlit's session
+> state, in memory, and is lost when you reload the page or restart the app.
+> There is deliberately no database yet. Records are kept separately per
+> dataset (by file hash), so notes never mix between logs.
 
-> **Not durable, by design.** Investigation state is kept in Streamlit's
-> session state, in memory, for this browser session only. It is lost when
-> you reload the page, the session ends or the app restarts. There is no
-> database at this stage. Each dataset (identified by a hash of the file
-> content) has its own records, so notes never leak between uploaded logs.
-> Alert IDs stay the same for the same data and settings, so records
-> reattach when you return to a dataset.
+## Detection rules
 
-The workflow only records decisions. It does not block traffic, send
-notifications or contact other systems.
+| ID | Alert type | Triggers when (default settings) | Severity |
+|----|------------|----------------------------------|----------|
+| NW-001 | Possible Port Scan | one source contacts ≥ 15 distinct ports on the same host within 60 s | Medium (High at ≥ 45) |
+| NW-002 | High Connection Rate | one source starts ≥ 100 connections within 60 s | Low (Medium at ≥ 300) |
+| NW-003 | Suspicious Destination Port | traffic reaches a watchlisted port (23, 3389, 4444, 5900, 6667, 31337) | Low (contextual only) |
+| NW-004 | Repeated Failed Connections | ≥ 10 rejected/unanswered TCP attempts to one service within 60 s | Medium (High at ≥ 30) |
 
-## Running the tests
+- **Deterministic and explainable:** same log + same settings = same alerts
+  and the same alert IDs. Every alert states what was measured, against which
+  threshold, and lists its supporting connections. No AI decides anything.
+- **Careful with missing data:** only TCP `S0`/`REJ`/`RSTOS0`/`SH` count as
+  failed attempts. Normal, missing or UDP states never do.
+- **Windows:** sliding and inclusive. Overlapping bursts merge into one
+  alert, and input order does not matter.
+- **False positives** are documented per rule: vulnerability scanners, busy
+  proxies, admin RDP sessions, clients retrying a dead server...
+
+Full reference: [docs/DETECTION_RULES.md](docs/DETECTION_RULES.md).
+
+## Example workflow
+
+1. **Get traffic:** download a training PCAP (see above) into `data/pcaps/`
+   and preview it: `python -m netwatch.pcap_inspect data/pcaps/http.cap`.
+2. **Make logs:** in WSL, run `zeek -C -r http.cap` and copy `conn.log` to `data/zeek_logs/`.
+3. **Summarise:** `python -m netwatch.analyzer data/zeek_logs/conn.log`. Who
+   talks most, on which ports, and how do connections end?
+4. **Detect:** `python -m netwatch.detection data/zeek_logs/conn.log`, or
+   open the dashboard and upload the log.
+5. **Triage:** open each alert, check the supporting connections, add notes
+   and close it with a disposition. For example, in the demo data the
+   8080 retries are probably *Benign / Expected Activity* (a client retrying
+   a dead server), while 36 refused SSH attempts from an external host are a
+   likely *True Positive*.
+6. **Tune:** if an alert is a false positive, adjust its threshold or
+   watchlist in **Detection settings** and see what changes.
+
+No capture handy? Steps 3–6 work on `data/demo/conn_demo.log`; its six
+scenarios are described in [data/demo/README.md](data/demo/README.md).
+
+## Screenshots
+
+All screenshots show the synthetic demo dataset.
+
+| Network analysis | Security alerts |
+|---|---|
+| ![Charts: connections over time, top source IPs, top destination ports](docs/screenshots/network-analysis.png) | ![Alerts table with severity, status and filters](docs/screenshots/security-alerts.png) |
+
+![Alert investigation: details, closed status with disposition, notes and history](docs/screenshots/alert-investigation.png)
+
+## Testing
 
 ```bash
 python -m unittest -v
 ```
 
-The tests don't need TShark or Zeek. One extra test reads a tiny synthetic
-capture with real TShark. It is skipped automatically when TShark isn't
-installed. The dashboard tests use Streamlit's `AppTest` to run
-`dashboard.py` without a browser, including simulated uploads.
+The suite covers parsing (TSV/JSON parity, malformed and hostile input,
+CRLF/BOM), analysis (types, UTC, missing values, empty data, deterministic
+ordering), detection (positive, negative, boundary, overlapping windows,
+unsorted and duplicated input, a pinned alert-ID regression, the demo
+end to end), the investigation workflow, dashboard data preparation, the
+real Streamlit app run headlessly with `AppTest` (including simulated
+uploads), and an end-to-end integration path. Tests that need TShark are
+skipped automatically when it is not installed. No test needs Zeek or
+network access.
 
-## Safety
+## Security and privacy
 
-- Reads files only: no live capture, no scanning, no traffic generation.
-- `tshark` runs with `-n`, so no DNS lookups are made while reading a capture.
-- TShark runs from an argument list (no shell), so file names can't inject commands.
-- Packet and log contents are only ever parsed and displayed, never executed.
-- Keep Wireshark updated. Its parsers process untrusted data.
+- **Offline by design:** reads files only. No live capture, scanning or
+  traffic generation, and nothing needs administrator rights.
+- **Untrusted input:** packet data and logs are parsed as data and never
+  executed. Uploads are checked (extension allow-list, 20 MB limit, PCAP and
+  binary files refused), parsed in memory and never written to disk. Their
+  names are used only as labels.
+- **Strict parsing:** text fields must match Zeek's own character set, so
+  terminal escape codes or Markdown links in a crafted log are rejected.
+  File-derived text shown as Markdown is escaped, and notes are shown as plain text.
+- **Safe subprocess use:** TShark runs from an argument list (no shell),
+  with `-n` (no DNS lookups) and a timeout.
+- **Local only:** the dashboard listens on `localhost` and Streamlit's usage
+  statistics are off (`.streamlit/config.toml`).
+- **No sensitive data in Git:** `.gitignore` blocks captures, logs, `.env`
+  and Streamlit secrets. The only tracked logs are synthetic and use
+  documentation-only addresses (192.0.2.0/24, 198.51.100.0/24,
+  203.0.113.0/24, 2001:db8::/32).
+
+## Limitations
+
+- **Connection metadata only:** no payload inspection, no `dns.log`/`http.log`
+  analysis yet, and no detection of attacks that look like normal connections.
+- **Simple rules with demonstration thresholds:** a real network needs
+  tuning, allow-lists and more context (asset inventory, threat intelligence).
+- **No persistence:** investigation notes are lost on reload or restart.
+  There are no users, roles or authentication. The dashboard is for local use only.
+- **Zeek is not bundled:** creating your own `conn.log` needs Zeek on Linux/WSL.
+- **Scale:** the dashboard targets logs up to 20 MB. Very large logs would
+  need streaming or a database.
+- **Not a production security tool:** it is a learning and portfolio project.
+
+## Roadmap
+
+| # | Milestone | Status |
+|---|-----------|--------|
+| 1 | Networking, PCAP, Wireshark: packet preview with TShark | ✅ Done |
+| 2 | Zeek logs: TSV/JSON `conn.log` parser | ✅ Done |
+| 3 | Python log analysis with pandas | ✅ Done |
+| 4 | Deterministic detection rules | ✅ Done |
+| 5 | Streamlit SOC dashboard | ✅ Done |
+| 6 | Alert investigation workflow | ✅ Done |
+| 7 | Optional AI explanations (Gemini *explains* existing alerts, never decides them) | ⏳ Not started (optional) |
+| 8 | Testing and GitHub polish | ✅ Done |
+
+Ideas beyond the roadmap: durable case storage (e.g. SQLite), allow-lists
+for known scanners, more Zeek logs (`dns.log`, `http.log`, `ssl.log`), and
+exporting an investigation report.
+
+## Learning objectives
+
+- Read packets with Wireshark/TShark and explain IPs, ports, protocols and the TCP handshake.
+- Understand how Zeek summarises traffic into connection logs, and what
+  `conn_state` and `history` reveal.
+- Parse and validate untrusted input safely in Python.
+- Analyse logs with pandas without misleading results (missing ≠ zero, UTC, deterministic order).
+- Design detection rules with thresholds and time windows, and reason
+  about false positives and severity.
+- Build a small, testable Streamlit application and practise alert triage.
+
+The concepts learned along the way are written up in
+[docs/LEARNING_LOG.md](docs/LEARNING_LOG.md).
 
 ## Project structure
 
 ```
-netwatch/            Python package
-  pcap_inspect.py    Milestone 1: PCAP preview tool
-  zeek_conn.py       Milestone 2: Zeek conn.log parser (TSV + JSON)
-  analyzer.py        Milestone 3: pandas traffic analysis
-  detection.py       Milestone 4: rule-based detection engine
-  dashboard_data.py  Milestone 5: data preparation for the dashboard (no UI code)
-  investigation.py   Milestone 6: triage workflow (statuses, notes, dispositions)
-dashboard.py         Milestone 5: Streamlit user interface
-.streamlit/config.toml  Dashboard settings: localhost only, no telemetry, dark theme
-scripts/
-  generate_demo_data.py  Rebuilds the synthetic demo dataset and fixtures
-data/demo/           Synthetic demo dataset (tracked; documentation IPs only)
-docs/DETECTION_RULES.md  Rule logic, severity, false positives, tuning
-tests/               Unit tests (python -m unittest)
-  fixtures/zeek/     Synthetic conn.log files (documentation IPs only)
-docs/LEARNING_LOG.md Concepts learned, milestone by milestone
-data/pcaps/          Your local capture files (ignored by Git)
-CLAUDE.md            Project rules for the AI coding assistant
+netwatch/
+  pcap_inspect.py       Packet preview with TShark (stdlib only)
+  zeek_conn.py          Zeek conn.log parser, TSV + JSON (stdlib only)
+  analyzer.py           pandas DataFrame + traffic statistics
+  detection.py          Rule-based detection engine (NW-001..NW-004)
+  investigation.py      Triage workflow: statuses, notes, dispositions
+  dashboard_data.py     Data preparation for the dashboard (no UI code)
+dashboard.py            Streamlit user interface
+.streamlit/config.toml  Local-only, no telemetry, dark theme
+scripts/generate_demo_data.py  Rebuilds the synthetic demo data (fixed seed)
+data/demo/              Synthetic demo dataset (tracked)
+data/pcaps/, data/zeek_logs/   Your own captures and logs (ignored by Git)
+tests/                  Unit, integration and headless UI tests + synthetic fixtures
+docs/
+  ARCHITECTURE.md       Modules, data flow, design decisions
+  DETECTION_RULES.md    Rule logic, severity, false positives, tuning
+  USAGE.md              Command-line guide with sample output
+  LEARNING_LOG.md       Concepts learned, milestone by milestone, and a glossary
+  screenshots/          Dashboard screenshots (synthetic data)
+CLAUDE.md               Project rules for the AI coding assistant
 ```
