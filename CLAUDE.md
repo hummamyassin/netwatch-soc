@@ -12,7 +12,7 @@ Optional later: Gemini API to *explain* existing alerts. Never use it to decide 
 
 ## Milestones (build ONE at a time, and only with explicit approval)
 1. Networking, PCAP, Wireshark ✅ (`netwatch/pcap_inspect.py`)
-2. Zeek logs
+2. Zeek logs ✅ (`netwatch/zeek_conn.py`: conn.log TSV/JSON → `ConnRecord`)
 3. Python log analysis (pandas)
 4. Deterministic detection rules
 5. Streamlit SOC dashboard (Plotly)
@@ -42,8 +42,13 @@ Add a package to `requirements.txt` only in the milestone that first uses it.
 - Readable over clever. Small functions, clear names, type hints where helpful.
 - Expected failures raise a clear custom error that is printed as one message, not a traceback.
 - Missing packet fields are normal (ICMP has no ports, ARP has no IPs). Show `-`.
+- Zeek parsing: whole-file problems raise `ZeekLogError`. Bad lines are skipped and
+  recorded in `ConnLogResult.errors` as `"line N: ..."`. Missing values are `None`
+  (never `"-"`, `""` or `0`). TSV and JSON must produce identical `ConnRecord`s.
 - Tests: stdlib `unittest`, run with `python -m unittest -v`. Mock tshark;
-  real-tool tests must `skipIf` the tool is missing.
+  real-tool tests must `skipIf` the tool is missing. Test data is synthetic, in
+  `tests/fixtures/`, using documentation IP ranges only (192.0.2.0/24, 198.51.100.0/24,
+  203.0.113.0/24, 2001:db8::/32).
 - Target OS: Windows 11 (also keep Linux/macOS working).
 
 ## Docs

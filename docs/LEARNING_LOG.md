@@ -52,3 +52,57 @@ Add to it at the end of each milestone, in your own words.
 - Open a sample capture in Wireshark and find a TCP three-way handshake (SYN, SYN-ACK, ACK).
 - What's the difference between `frame.len` and the IP total length?
 - Why might the same IP appear as both source and destination in a conversation?
+
+---
+
+## Milestone 2: Zeek structured logs (conn.log)
+
+### Packets vs connections
+- Wireshark shows **packets**. Zeek groups packets into **connections**
+  (also called flows) and writes one summary line per connection.
+- A web page load might be 20 packets but only 1 line in `conn.log`. This is
+  why analysts start with logs: they are smaller and easier to search.
+- Zeek writes many logs from the same traffic: `conn.log` (every connection),
+  `dns.log`, `http.log`, `ssl.log`, … They are linked by the connection **`uid`**.
+
+### Key conn.log fields
+- `id.orig_h` / `id.orig_p`: the **originator**, who started the connection.
+- `id.resp_h` / `id.resp_p`: the **responder**.
+- `proto`: transport (`tcp`/`udp`/`icmp`). `service`: application protocol Zeek
+  recognised by looking at the traffic, not just the port number.
+- `duration`, `orig_bytes`, `resp_bytes`, `orig_pkts`, `resp_pkts`: how long
+  and how much in each direction. A big `orig_bytes` with a small
+  `resp_bytes` means the inside host *sent* a lot, which may matter later for
+  data-exfiltration ideas.
+- `conn_state`: how the connection went. `SF` = normal, `S0` = no reply,
+  `REJ` = rejected. Lots of `S0`/`REJ` from one host is a classic sign of scanning.
+- `history`: a letter per event. Uppercase = originator, lowercase = responder.
+  `S` SYN, `h` SYN-ACK, `A` ACK, `D` data, `F` FIN, `R` RST.
+  So `ShADadFf` is a normal TCP conversation.
+
+### Log formats
+- **TSV** (default): `#` header lines describe the file. `#fields` names the
+  columns, and `-` means unset. Read columns **by name** from `#fields`,
+  never by fixed position, because columns differ between Zeek versions and configs.
+- **JSON** (`LogAscii::use_json=T`): one object per line ("NDJSON"). Unset
+  fields are left out entirely.
+
+### Data engineering ideas
+- **Normalisation**: turn different input formats into one clean shape
+  (`ConnRecord`), so every later step only has to handle one format.
+- **Missing vs zero**: `None` (unknown) is different from `0` (measured as zero).
+  An `S0` connection has *unknown* bytes, not zero bytes.
+- **Validate at the edge**: check IPs (`ipaddress` module), port range
+  (0–65535) and non-negative counts while parsing, so bad data never reaches
+  detection rules.
+- **Skip and report, don't crash**: one corrupt line shouldn't lose a whole
+  log, but it must not be hidden either. Report it with its line number.
+- **ICMP has no ports**: Zeek reuses the port columns for ICMP type/code.
+  Treating "type 8" as "port 8" would confuse a port-scan rule later.
+- **Synthetic fixtures** with documentation IP ranges (RFC 5737, RFC 3849)
+  give realistic tests without any real or private traffic.
+
+### Questions to explore
+- Which conn_state would you expect for a UDP DNS query that never got an answer?
+- Why could `service` say `http` even when the port is not 80?
+- What would many `REJ` connections from one source to many ports on one target suggest?

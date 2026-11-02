@@ -1,4 +1,4 @@
-# Milestone 1 uses only the Python standard library.
+# Milestones 1-2 use only the Python standard library.
 # Third-party packages (pandas, streamlit, plotly) will be added here
 # in the milestone that first needs them.
 #
