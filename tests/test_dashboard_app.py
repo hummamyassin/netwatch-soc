@@ -120,5 +120,85 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(at.main.title[0].value, "Alert Investigation")
 
 
+def open_investigation(at: AppTest, alert_id: str) -> AppTest:
+    at.radio(key="page").set_value("Alert Investigation").run()
+    picker = next(box for box in at.main.selectbox if box.key.startswith("picker_"))
+    picker.set_value(alert_id).run()
+    return at
+
+
+SCAN_ALERT = "NW-001-a9bbeb729a3d"      # the demo port scan
+RETRY_ALERT = "NW-004-92c2a074b055"     # the demo's harmless 8080 retries
+
+
+class InvestigationWorkflowTests(unittest.TestCase):
+    def assert_no_crash(self, at: AppTest) -> None:
+        self.assertEqual([e.value for e in at.exception], [])
+
+    def test_details_and_supporting_events(self):
+        at = open_investigation(start_app(), SCAN_ALERT)
+        self.assert_no_crash(at)
+        details = next(d.value for d in at.main.dataframe if "Field" in d.value.columns)
+        fields = dict(zip(details["Field"], details["Value"]))
+        self.assertEqual(fields["Alert ID"], SCAN_ALERT)
+        self.assertEqual(fields["Detection rule"], "NW-001 Possible Port Scan")
+        self.assertEqual((fields["Source"], fields["Destination"]), ("203.0.113.66", "192.0.2.20"))
+        self.assertEqual(fields["Rule threshold"], "at least 15 distinct ports on one host within 60 s")
+        events = next(d.value for d in at.main.dataframe if "Event ID" in d.value.columns)
+        self.assertEqual(len(events), 60)
+
+    def test_full_workflow_and_dashboard_status(self):
+        at = open_investigation(start_app(), SCAN_ALERT)
+        at.button(key=f"start_{SCAN_ALERT}").click().run()
+        self.assertTrue(any("Investigation started" in s.value for s in at.success))
+        at.text_area(key=f"note_{SCAN_ALERT}").input("Source is external; 50 ports refused, 2 open (22, 80).")
+        at.button(key=f"add_note_{SCAN_ALERT}").click().run()
+        self.assertIn("Source is external; 50 ports refused, 2 open (22, 80).", [t.value for t in at.main.text])
+        at.selectbox(key=f"disposition_{SCAN_ALERT}").set_value("True Positive")
+        at.button(key=f"close_{SCAN_ALERT}").click().run()
+        self.assert_no_crash(at)
+        self.assertTrue(any("closed as True Positive" in s.value for s in at.success))
+
+        at.radio(key="page").set_value("Dashboard").run()
+        table = alerts_table(at).set_index("Alert ID")
+        self.assertEqual(table.loc[SCAN_ALERT, "Status"], "Closed")
+        self.assertEqual(table.loc[RETRY_ALERT, "Status"], "New")
+        at.multiselect(key="filter_status").set_value(["Closed"]).run()
+        self.assertEqual(alerts_table(at)["Alert ID"].tolist(), [SCAN_ALERT])
+
+    def test_closing_requires_a_disposition(self):
+        at = open_investigation(start_app(), RETRY_ALERT)
+        at.button(key=f"start_{RETRY_ALERT}").click().run()
+        at.button(key=f"close_{RETRY_ALERT}").click().run()
+        self.assert_no_crash(at)
+        self.assertTrue(any("Choose a disposition" in e.value for e in at.error))
+        self.assertEqual(at.session_state["investigations"][dataset_id(at)].status(RETRY_ALERT), "Investigating")
+
+    def test_empty_note_is_rejected(self):
+        at = open_investigation(start_app(), RETRY_ALERT)
+        at.button(key=f"start_{RETRY_ALERT}").click().run()
+        at.text_area(key=f"note_{RETRY_ALERT}").input("   ")
+        at.button(key=f"add_note_{RETRY_ALERT}").click().run()
+        self.assertTrue(any("cannot be empty" in e.value for e in at.error))
+
+    def test_state_is_kept_per_dataset(self):
+        at = open_investigation(start_app(), SCAN_ALERT)
+        at.button(key=f"start_{SCAN_ALERT}").click().run()
+        tsv_dataset = dataset_id(at)
+        # The JSON demo has the same connections, so the same alert IDs, but it is a different file.
+        at.selectbox(key="demo_choice").set_value("Demo: Zeek JSON (synthetic)").run()
+        at = open_investigation(at, SCAN_ALERT)
+        self.assert_no_crash(at)
+        self.assertNotEqual(dataset_id(at), tsv_dataset)
+        self.assertTrue(any(b.key == f"start_{SCAN_ALERT}" for b in at.main.button))   # New again here
+        at.selectbox(key="demo_choice").set_value("Demo: Zeek TSV (synthetic)").run()
+        self.assertEqual(at.session_state["investigations"][tsv_dataset].status(SCAN_ALERT), "Investigating")
+
+
+def dataset_id(at: AppTest) -> str:
+    picker = next(box for box in at.main.selectbox if box.key.startswith("picker_"))
+    return picker.key.removeprefix("picker_")
+
+
 if __name__ == "__main__":
     unittest.main()

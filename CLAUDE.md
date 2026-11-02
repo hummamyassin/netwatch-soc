@@ -16,7 +16,7 @@ Optional later: Gemini API to *explain* existing alerts. Never use it to decide 
 3. Python log analysis ✅ (`netwatch/analyzer.py`: `ConnRecord`s → typed pandas DataFrame + stats)
 4. Deterministic detection rules ✅ (`netwatch/detection.py`: NW-001..NW-004 → `Alert`; docs/DETECTION_RULES.md)
 5. Streamlit SOC dashboard ✅ (`dashboard.py` UI + `netwatch/dashboard_data.py` data prep)
-6. Alert investigation workflow
+6. Alert investigation workflow ✅ (`netwatch/investigation.py` + investigation page)
 7. Optional AI explanations (Gemini)
 8. Testing and GitHub polish
 
@@ -70,6 +70,12 @@ tests with `.venv\Scripts\python`. `pcap_inspect.py` and `zeek_conn.py` stay std
   text passed to Markdown (`safe_md`); show raw text with `st.code`/`st.dataframe`.
   Cache parsing/detection with `st.cache_data`. `.streamlit/config.toml` keeps the app
   on localhost with telemetry off. UI tests use `streamlit.testing.v1.AppTest`.
+- Investigation: workflow rules live in `netwatch/investigation.py` (no Streamlit).
+  Actions: start (New→Investigating), close (Investigating→Closed, disposition required),
+  reopen (Closed→Investigating). Validate everything before mutating; failures raise
+  `WorkflowError` and change nothing. One `InvestigationStore` per dataset ID in
+  `st.session_state["investigations"]`: NOT durable (say so in UI and docs). Notes are
+  user text: display with `st.text`, never as Markdown. No automation/integrations.
 - Tests: stdlib `unittest`, run with `python -m unittest -v`. Mock tshark;
   real-tool tests must `skipIf` the tool is missing. Test data is synthetic, in
   `tests/fixtures/`, using documentation IP ranges only (192.0.2.0/24, 198.51.100.0/24,

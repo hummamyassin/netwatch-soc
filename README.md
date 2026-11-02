@@ -26,7 +26,7 @@ PCAP ──► Wireshark / Zeek ──► Structured logs ──► Python detec
   same alert, and every alert can be explained.
 - Present alerts in a dashboard and practise an analyst's investigation workflow.
 
-## Current capabilities (Milestones 1–5)
+## Current capabilities (Milestones 1–6)
 
 - `netwatch/pcap_inspect.py`: prints a readable preview of the first packets
   in a `.pcap` / `.pcapng` file: time, source/destination IP, protocol,
@@ -50,9 +50,10 @@ PCAP ──► Wireshark / Zeek ──► Structured logs ──► Python detec
 - `dashboard.py`: a dark SOC-style **Streamlit** dashboard with KPI cards,
   Plotly charts and a filterable alerts table. It uses the real analyzer and
   detection engine on the demo data or on an uploaded Zeek log.
+- `netwatch/investigation.py` + the dashboard's **Alert Investigation** page:
+  a New → Investigating → Closed triage workflow with notes, closure
+  dispositions and history, kept separately for each dataset.
 - Unit tests for all tools, plus headless UI tests for the dashboard.
-
-The alert investigation workflow is not built yet. See the roadmap.
 
 ## Roadmap
 
@@ -63,7 +64,7 @@ The alert investigation workflow is not built yet. See the roadmap.
 | 3 | **Python log analysis** ✅ | Load Zeek logs into pandas, summarise hosts, ports, protocols, states, bytes, time |
 | 4 | **Deterministic detection rules** ✅ | Port scan, connection rate, watchlisted ports, repeated failures; explainable alerts |
 | 5 | **Streamlit SOC dashboard** ✅ | KPI cards, Plotly charts, alerts table with filters, uploads, detection settings |
-| 6 | Alert investigation workflow | Drill into an alert, see related connections, mark status |
+| 6 | **Alert investigation workflow** ✅ | Alert details, supporting connections, status, notes, dispositions |
 | 7 | Optional AI explanations | Gemini API *explains* an existing alert. It never decides what is an alert |
 | 8 | Testing and GitHub polish | More tests, screenshots, clean README, demo data |
 
@@ -485,6 +486,51 @@ malformed logs show clear errors instead of crashing.
 `localhost` (other computers on your network cannot open it), and
 Streamlit's usage statistics are turned off.
 
+---
+
+## Alert investigation (Milestone 6)
+
+Select an alert in the dashboard's table and press **Investigate**, or open
+**Alert Investigation** in the sidebar and pick an alert. The page shows:
+
+- **Details:** alert ID, type, severity, source and destination, protocol
+  and ports, first and last seen (UTC), number of related connections, the
+  rule that fired, its threshold and what was measured.
+- **Why this alert was raised:** the rule's plain-English explanation, plus
+  the rule's description and common false positives.
+- **Supporting connection events:** the exact connections from the log
+  behind the alert.
+- **Investigation panel:** the triage workflow.
+
+```
+New ──Start investigation──► Investigating ──Close (with disposition)──► Closed
+                                   ▲                                       │
+                                   └──────────────── Reopen ───────────────┘
+```
+
+| Disposition | Meaning |
+|-------------|---------|
+| True Positive | The activity really was malicious or unwanted |
+| False Positive | The rule fired on activity it should not have matched |
+| Benign / Expected Activity | The rule worked, but the activity is known and allowed |
+| Inconclusive | Not enough information to decide |
+
+Notes can be added while an alert is being investigated. Closing requires a
+disposition and can include a closing note. Every action is recorded in the
+case history with a UTC timestamp. Statuses also appear in the dashboard's
+alerts table and status filter.
+
+> **Not durable, by design.** Investigation state is kept in Streamlit's
+> session state, in memory, for this browser session only. It is lost when
+> you reload the page, the session ends or the app restarts. There is no
+> database at this stage. Each dataset (identified by a hash of the file
+> content) has its own records, so notes never leak between uploaded logs.
+> Alert IDs stay the same for the same data and settings, so records
+> reattach when you return to a dataset.
+
+The workflow only records decisions. It does not block traffic, send
+notifications or contact other systems.
+
 ## Running the tests
 
 ```bash
@@ -513,6 +559,7 @@ netwatch/            Python package
   analyzer.py        Milestone 3: pandas traffic analysis
   detection.py       Milestone 4: rule-based detection engine
   dashboard_data.py  Milestone 5: data preparation for the dashboard (no UI code)
+  investigation.py   Milestone 6: triage workflow (statuses, notes, dispositions)
 dashboard.py         Milestone 5: Streamlit user interface
 .streamlit/config.toml  Dashboard settings: localhost only, no telemetry, dark theme
 scripts/

@@ -22,7 +22,8 @@ from typing import Callable, Iterable
 import pandas as pd
 
 from netwatch import analyzer as an
-from netwatch.detection import SEVERITIES, Alert, severity_counts
+from netwatch.detection import RULES, SEVERITIES, Alert, severity_counts
+from netwatch.investigation import NEW, STATUSES, Case
 from netwatch.zeek_conn import parse_conn_text
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -45,8 +46,7 @@ BINARY_SIGNATURES = {
 }
 
 SEVERITY_ICONS = {"High": "🔴", "Medium": "🟠", "Low": "🔵"}
-STATUSES = ("New", "Investigating", "Closed")
-DEFAULT_STATUS = "New"
+DEFAULT_STATUS = NEW  # STATUSES (New, Investigating, Closed) comes from netwatch.investigation
 
 ALERT_TABLE_COLUMNS = ["Severity", "Status", "Alert type", "Source", "Destination", "Ports", "Protocol",
                        "First seen (UTC)", "Last seen (UTC)", "Connections", "Alert ID"]
@@ -257,6 +257,46 @@ def alerts_table(alerts: list[Alert], status_of: Callable[[str], str] = _no_stat
         "Alert ID": a.alert_id,
     } for a in sort_alerts(alerts)]
     return pd.DataFrame(rows, columns=ALERT_TABLE_COLUMNS)
+
+
+def threshold_text(alert: Alert) -> str:
+    """The rule condition that was applied, in words."""
+    window = f"within {alert.window_seconds} s"
+    return {
+        "NW-001": f"at least {alert.threshold} distinct ports on one host {window}",
+        "NW-002": f"at least {alert.threshold} connections from one source {window}",
+        "NW-003": "any connection that reached a watchlisted port (no time window)",
+        "NW-004": f"at least {alert.threshold} failed TCP attempts to one service {window}",
+    }.get(alert.rule_id, f"threshold {alert.threshold}")
+
+
+def alert_detail_rows(alert: Alert) -> pd.DataFrame:
+    """Field/value pairs for the alert details view."""
+    measured = (f"{alert.observed_value} (peak within one {alert.window_seconds}-second window)"
+                if alert.window_seconds else f"{alert.observed_value} connection(s)")
+    rows = [
+        ("Alert ID", alert.alert_id),
+        ("Detection rule", f"{alert.rule_id} {RULES[alert.rule_id].name}" if alert.rule_id in RULES else alert.rule_id),
+        ("Severity", alert.severity),
+        ("Source", alert.src_ip),
+        ("Destination", alert.dst_ip or f"{alert.destination_count} different hosts"),
+        ("Protocol", ", ".join(alert.protocols) or "not recorded"),
+        ("Destination ports", format_ports(alert.dst_ports, limit=20)),
+        ("First seen", format_ts(alert.first_seen)),
+        ("Last seen", format_ts(alert.last_seen)),
+        ("Related connections", str(alert.connection_count)),
+        ("Rule threshold", threshold_text(alert)),
+        ("Measured", measured),
+    ]
+    return pd.DataFrame(rows, columns=["Field", "Value"])
+
+
+def case_history_table(case: Case) -> pd.DataFrame:
+    """The case history, oldest first (action first, so it stays readable in a narrow panel)."""
+    return pd.DataFrame(
+        [(entry.action, entry.detail, format_ts(entry.at)) for entry in case.history],
+        columns=["Action", "Detail", "Time"],
+    )
 
 
 def supporting_events(connections: pd.DataFrame, alert: Alert) -> pd.DataFrame:

@@ -19,6 +19,7 @@ import streamlit as st
 
 from netwatch import analyzer as an
 from netwatch import dashboard_data as dd
+from netwatch import investigation as inv
 from netwatch.detection import (
     MAX_THRESHOLD,
     MAX_WINDOW_SECONDS,
@@ -34,6 +35,8 @@ from netwatch.zeek_conn import ZeekLogError
 st.set_page_config(page_title="NetWatch SOC", page_icon="🛡️", layout="wide")
 
 PAGES = ["Dashboard", "Alert Investigation"]
+SEVERITY_BADGE_COLORS = {"High": "red", "Medium": "orange", "Low": "blue"}
+STATUS_BADGE_COLORS = {inv.NEW: "gray", inv.INVESTIGATING: "orange", inv.CLOSED: "green"}
 ACCENT = "#2dd4bf"
 CHART_COLORS = ["#2dd4bf", "#60a5fa", "#a78bfa", "#94a3b8", "#f472b6", "#fbbf24"]
 
@@ -57,6 +60,22 @@ def load_dataset(data: bytes, name: str) -> dd.Dataset:
 def detect_alerts(dataset_id: str, config_key: str, _dataset: dd.Dataset, _config: DetectionConfig) -> list[Alert]:
     """Cached per (dataset, settings). Streamlit does not hash arguments starting with '_'."""
     return run_detection(_dataset.connections, _config)
+
+
+# ---------------------------------------------------------------------------
+# Investigation state: one store per dataset, in this browser session only
+# ---------------------------------------------------------------------------
+
+def investigation_store(dataset: dd.Dataset) -> inv.InvestigationStore:
+    """Session state is NOT durable: it is lost on page reload or app restart."""
+    stores = st.session_state.setdefault("investigations", {})
+    return inv.store_for(stores, dataset.dataset_id)
+
+
+def open_in_investigation(dataset_id: str, alert_id: str) -> None:
+    """Button callback: show this alert on the investigation page."""
+    st.session_state[f"picker_{dataset_id}"] = alert_id
+    st.session_state["page"] = "Alert Investigation"
 
 
 # ---------------------------------------------------------------------------
@@ -239,7 +258,7 @@ def network_analysis(connections) -> None:
             show_chart(fig, "chart_states")
 
 
-def alerts_section(alerts: list[Alert]) -> None:
+def alerts_section(dataset: dd.Dataset, alerts: list[Alert], store: inv.InvestigationStore) -> None:
     st.subheader("Security Alerts")
     if not alerts:
         st.success("No alerts. Nothing in this log reached a detection threshold with the current settings.")
@@ -252,11 +271,14 @@ def alerts_section(alerts: list[Alert]) -> None:
     types = middle.multiselect("Alert type", type_options, default=type_options, key="filter_type")
     statuses = right.multiselect("Status", list(dd.STATUSES), default=list(dd.STATUSES), key="filter_status")
 
-    shown = dd.filter_alerts(alerts, severities, types, statuses)
-    st.caption(f"Showing {len(shown)} of {len(alerts)} alerts, most severe and most recent first. "
+    shown = dd.filter_alerts(alerts, severities, types, statuses, store.status)
+    counts = store.status_counts([alert.alert_id for alert in alerts])
+    st.caption(f"Showing {len(shown)} of {len(alerts)} alerts, most severe and most recent first · "
+               f"New {counts[inv.NEW]} · Investigating {counts[inv.INVESTIGATING]} · Closed {counts[inv.CLOSED]}. "
                "Alerts are leads for review, not confirmed attacks.")
-    st.dataframe(
-        dd.alerts_table(shown), hide_index=True, key="alerts_table",
+    table = dd.alerts_table(shown, store.status)
+    event = st.dataframe(
+        table, hide_index=True, key="alerts_table", on_select="rerun", selection_mode="single-row",
         column_config={
             "Severity": st.column_config.TextColumn(width="small"),
             "Ports": st.column_config.TextColumn(width="small"),
@@ -266,23 +288,132 @@ def alerts_section(alerts: list[Alert]) -> None:
             "Alert ID": st.column_config.TextColumn(width="medium"),
         },
     )
+    selected_rows = event.selection.rows if event is not None else []
+    if selected_rows and selected_rows[0] < len(table):
+        alert_id = table.iloc[selected_rows[0]]["Alert ID"]
+        st.button(f"🔎 Investigate {alert_id}", type="primary", key="investigate_selected",
+                  on_click=open_in_investigation, args=(dataset.dataset_id, alert_id))
+    else:
+        st.caption("Select a row (the box at its left) to open the alert in **Alert Investigation**.")
 
 
-def dashboard_page(dataset: dd.Dataset, alerts: list[Alert]) -> None:
+def dashboard_page(dataset: dd.Dataset, alerts: list[Alert], store: inv.InvestigationStore) -> None:
     st.title("Security Overview")
     dataset_banner(dataset)
     kpi_cards(dataset, alerts)
     network_analysis(dataset.connections)
-    alerts_section(alerts)
+    alerts_section(dataset, alerts, store)
 
 
 # ---------------------------------------------------------------------------
 # Alert investigation page
 # ---------------------------------------------------------------------------
 
-def investigation_page(dataset: dd.Dataset, alerts: list[Alert]) -> None:
+def run_action(action, message: str) -> None:
+    """Run a workflow action; on success remember a message and redraw the page."""
+    try:
+        action()
+    except inv.WorkflowError as error:
+        st.error(dd.safe_md(error))
+        return
+    st.session_state["flash"] = message
+    st.rerun()
+
+
+def alert_details(alert: Alert) -> None:
+    st.subheader(alert.alert_type)
+    st.badge(f"{alert.severity} severity", color=SEVERITY_BADGE_COLORS.get(alert.severity, "gray"))
+    rows = dd.alert_detail_rows(alert)
+    st.dataframe(rows, hide_index=True, key="alert_details", height=35 * (len(rows) + 1) + 3,
+                 column_config={"Field": st.column_config.TextColumn(width="small")})
+    st.markdown("**Why this alert was raised**")
+    st.info(dd.safe_md(alert.explanation))
+    rule = RULES.get(alert.rule_id)
+    if rule:
+        with st.expander("About this rule and common false positives"):
+            st.markdown(dd.safe_md(rule.description))
+            st.markdown("\n".join(f"- {dd.safe_md(reason)}" for reason in rule.false_positives))
+
+
+def workflow_panel(store: inv.InvestigationStore, alert: Alert) -> None:
+    case = store.case(alert.alert_id)
+    st.subheader("Investigation")
+    st.badge(case.status, color=STATUS_BADGE_COLORS.get(case.status, "gray"))
+    if case.disposition:
+        st.markdown(f"**Disposition:** {dd.safe_md(case.disposition)}")
+
+    key = alert.alert_id
+    if case.status == inv.NEW:
+        st.write("Review the details and the supporting events, then start the investigation.")
+        if st.button("Start investigation", type="primary", key=f"start_{key}"):
+            run_action(lambda: store.start_investigation(key), "Investigation started.")
+    elif case.status == inv.INVESTIGATING:
+        with st.form(f"note_form_{key}", clear_on_submit=True):
+            text = st.text_area("Investigation note", max_chars=inv.MAX_NOTE_LENGTH, key=f"note_{key}",
+                                placeholder="What did you check? What did you find?")
+            if st.form_submit_button("Add note", key=f"add_note_{key}"):
+                run_action(lambda: store.add_note(key, text), "Note added.")
+        with st.form(f"close_form_{key}"):
+            disposition = st.selectbox("Closure disposition", inv.DISPOSITIONS, index=None,
+                                       placeholder="Choose a disposition", key=f"disposition_{key}")
+            closing_note = st.text_area("Closing note (optional)", max_chars=inv.MAX_NOTE_LENGTH,
+                                        key=f"closing_note_{key}")
+            if st.form_submit_button("Close alert", type="primary", key=f"close_{key}"):
+                if disposition is None:
+                    st.error("Choose a disposition before closing the alert.")
+                else:
+                    run_action(lambda: store.close(key, disposition, closing_note),
+                               f"Alert closed as {disposition}.")
+    else:
+        if st.button("Reopen alert", key=f"reopen_{key}"):
+            run_action(lambda: store.reopen(key), "Alert reopened.")
+
+    if case.notes:
+        st.markdown(f"**Notes ({len(case.notes)})**")
+        for note in reversed(case.notes):
+            with st.container(border=True):
+                st.caption(dd.format_ts(note.created_at))
+                st.text(note.text)  # plain text: notes are never rendered as Markdown
+    if case.history:
+        st.markdown("**History**")
+        st.dataframe(dd.case_history_table(case), hide_index=True, key=f"history_{key}")
+
+
+def investigation_page(dataset: dd.Dataset, alerts: list[Alert], store: inv.InvestigationStore) -> None:
     st.title("Alert Investigation")
-    st.info("The investigation workflow (statuses, notes and closure dispositions) arrives in Milestone 6.")
+    st.caption("Statuses and notes are kept only in this browser session: they are lost when you reload "
+               "the page or restart the app. Each dataset has its own investigation records.")
+    if not alerts:
+        st.success("No alerts to investigate for this dataset and these detection settings.")
+        return
+
+    ordered = dd.sort_alerts(alerts)
+    by_id = {alert.alert_id: alert for alert in ordered}
+    picker = f"picker_{dataset.dataset_id}"
+    if st.session_state.get(picker) not in by_id:
+        st.session_state[picker] = ordered[0].alert_id
+    alert_id = st.selectbox("Alert", list(by_id), format_func=lambda i: dd.alert_label(by_id[i]), key=picker)
+    alert = by_id[alert_id]
+
+    message = st.session_state.pop("flash", None)
+    if message:
+        st.success(message)
+
+    details, workflow = st.columns([3, 2], gap="large")
+    with details:
+        alert_details(alert)
+    with workflow:
+        workflow_panel(store, alert)
+
+    st.subheader("Supporting connection events")
+    st.caption(f"The {alert.connection_count} connection(s) from the log behind this alert, oldest first. "
+               "An empty value (None) means Zeek did not record it.")
+    st.dataframe(dd.supporting_events(dataset.connections, alert), hide_index=True, key="supporting_events")
+
+    orphaned = store.orphaned(list(by_id))
+    if orphaned:
+        st.caption(f"{len(orphaned)} investigation record(s) belong to alerts that the current detection "
+                   "settings do not produce. They reappear when the settings match again.")
 
 
 # ---------------------------------------------------------------------------
@@ -294,10 +425,11 @@ def main() -> None:
         st.info("Choose the demo dataset or upload a Zeek conn.log in the sidebar to begin.")
         return
     alerts = detect_alerts(dataset.dataset_id, repr(config), dataset, config)
+    store = investigation_store(dataset)
     if page == "Dashboard":
-        dashboard_page(dataset, alerts)
+        dashboard_page(dataset, alerts, store)
     else:
-        investigation_page(dataset, alerts)
+        investigation_page(dataset, alerts, store)
 
 
 main()

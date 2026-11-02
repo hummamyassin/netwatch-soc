@@ -220,6 +220,40 @@ class FormattingTests(unittest.TestCase):
         self.assertIn("3 hosts", label)
 
 
+class AlertDetailTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.alerts = {a.rule_id + a.severity: a for a in run_detection(an.load_log(DEMO_TSV).connections)}
+
+    def test_detail_rows(self):
+        rows = dd.alert_detail_rows(self.alerts["NW-001High"])
+        fields = dict(zip(rows["Field"], rows["Value"]))
+        self.assertEqual(fields["Detection rule"], "NW-001 Possible Port Scan")
+        self.assertEqual(fields["First seen"], "2025-03-10 08:20:00 UTC")
+        self.assertEqual(fields["Related connections"], "60")
+        self.assertEqual(fields["Measured"], "60 (peak within one 60-second window)")
+        self.assertTrue(fields["Destination ports"].endswith("(+40)"))
+
+    def test_threshold_text_per_rule(self):
+        self.assertEqual(dd.threshold_text(self.alerts["NW-004High"]),
+                         "at least 10 failed TCP attempts to one service within 60 s")
+        self.assertEqual(dd.threshold_text(self.alerts["NW-003Low"]),
+                         "any connection that reached a watchlisted port (no time window)")
+        rows = dd.alert_detail_rows(self.alerts["NW-003Low"])
+        self.assertIn("connection(s)", dict(zip(rows["Field"], rows["Value"]))["Measured"])
+
+    def test_case_history_table(self):
+        from netwatch.investigation import InvestigationStore
+        store = InvestigationStore("x")
+        store.start_investigation("A1", now=datetime(2025, 3, 10, 9, 0, tzinfo=timezone.utc))
+        store.close("A1", "Inconclusive", now=datetime(2025, 3, 10, 9, 5, tzinfo=timezone.utc))
+        table = dd.case_history_table(store.case("A1"))
+        self.assertEqual(table.values.tolist(), [
+            ["Investigation started", "", "2025-03-10 09:00:00 UTC"],
+            ["Closed", "Inconclusive", "2025-03-10 09:05:00 UTC"],
+        ])
+
+
 class SupportingEventTests(unittest.TestCase):
     def test_events_behind_an_alert(self):
         connections = an.load_log(DEMO_TSV).connections

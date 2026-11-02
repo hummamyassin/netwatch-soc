@@ -262,3 +262,53 @@ Add to it at the end of each milestone, in your own words.
 - Which chart would show you a port scan fastest, and which a DNS burst?
 - Why is caching keyed on the file *content* (a hash) rather than its name?
 - What could go wrong if the dashboard listened on all network interfaces in a café?
+
+---
+
+## Milestone 6: Alert investigation workflow
+
+### Triage in a SOC
+- **Triage** means deciding quickly how much attention an alert needs. An
+  analyst reads what fired and why, checks the supporting evidence (here,
+  the exact connections from conn.log), and decides.
+- A **status** shows where an alert is in the process: New (nobody has
+  looked), Investigating (someone owns it), Closed (decided).
+- A **disposition** records the conclusion:
+  - *True Positive*: real malicious or unwanted activity.
+  - *False Positive*: the rule fired on activity it should not match. This
+    is a reason to tune the rule.
+  - *Benign / Expected Activity*: the rule did its job, but the activity is
+    allowed, e.g. the admin's RDP session. This is a reason to document an exception.
+  - *Inconclusive*: not enough evidence. Say what you would need to decide.
+- **Notes** are the audit trail: what you checked, what you found, and why
+  you closed it. Good notes let a colleague (or you, next month) understand
+  the decision.
+
+### Investigating the demo alerts (examples)
+- *Possible Port Scan* from 203.0.113.66: 60 ports in 24 s from an external
+  host, mostly refused. Ask: is this an approved scanner? Did any port answer
+  (22 and 80 did)? Likely True Positive (reconnaissance).
+- *Repeated Failed Connections* to 198.51.100.70:8080: an internal client
+  retrying every 5 s with no answer. Ask: is that server down? Likely
+  Benign / Expected Activity, and worth telling the server owner.
+- *Suspicious Destination Port* 3389: an internal RDP session. Ask: is
+  192.0.2.14 an admin workstation? If yes, Benign / Expected Activity.
+
+### Engineering ideas
+- A **state machine** lists the allowed transitions explicitly. Checking
+  "is this action allowed from the current status?" prevents impossible
+  states, such as an alert that is Investigating but still has a disposition.
+  A unit test caught exactly that bug during development.
+- **Validate, then change**: check every input before modifying anything,
+  so a failed action leaves the case untouched.
+- **Session state is not storage.** It lives in memory for one browser
+  session. Real SOC tools keep cases in a database or ticket system, which
+  is a deliberate next step, not part of this milestone.
+- **Isolation**: investigation records are keyed by a hash of the dataset,
+  so notes for one log can never show up on another log.
+
+### Questions to explore
+- Which demo alert would you close as False Positive, and how would you
+  change the rule settings so it does not fire again?
+- What information would you need before closing the 4444 alert?
+- Why is it useful that the same data and settings always give the same alert ID?
