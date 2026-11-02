@@ -26,7 +26,7 @@ PCAP ──► Wireshark / Zeek ──► Structured logs ──► Python detec
   same alert, and every alert can be explained.
 - Present alerts in a dashboard and practise an analyst's investigation workflow.
 
-## Current capabilities (Milestones 1–3)
+## Current capabilities (Milestones 1–4)
 
 - `netwatch/pcap_inspect.py`: prints a readable preview of the first packets
   in a `.pcap` / `.pcapng` file: time, source/destination IP, protocol,
@@ -40,11 +40,16 @@ PCAP ──► Wireshark / Zeek ──► Structured logs ──► Python detec
   summarises them: totals, unique IPs, protocol mix, top sources, top
   destination ports, connection states, bytes, durations and connections
   over time. Missing values are never counted as zero.
-- Synthetic Zeek fixtures in `tests/fixtures/zeek/`, so everything can be
-  tested without installing Zeek.
+- `netwatch/detection.py`: four deterministic, explainable detection rules
+  (possible port scan, high connection rate, watchlisted destination port,
+  repeated failed connections) that produce alerts with stable IDs, severity,
+  thresholds, explanations and supporting connection references.
+- A synthetic demo dataset in `data/demo/` (450 connections, TSV and JSON)
+  and synthetic test fixtures in `tests/fixtures/zeek/`, so everything can be
+  tried and tested without real captures or Zeek.
 - Unit tests for all tools.
 
-Detection rules and the dashboard are not built yet. See the roadmap.
+The dashboard is not built yet. See the roadmap.
 
 ## Roadmap
 
@@ -53,7 +58,7 @@ Detection rules and the dashboard are not built yet. See the roadmap.
 | 1 | **Networking, PCAP, Wireshark** ✅ | Project setup; read packets from a capture with TShark |
 | 2 | **Zeek logs** ✅ | Parse Zeek `conn.log` (TSV and JSON) into normalised connection records |
 | 3 | **Python log analysis** ✅ | Load Zeek logs into pandas, summarise hosts, ports, protocols, states, bytes, time |
-| 4 | Deterministic detection rules | Simple rules, e.g. many ports from one host, rare DNS, odd connections |
+| 4 | **Deterministic detection rules** ✅ | Port scan, connection rate, watchlisted ports, repeated failures; explainable alerts |
 | 5 | Streamlit SOC dashboard | Alerts table, charts (Plotly), filters |
 | 6 | Alert investigation workflow | Drill into an alert, see related connections, mark status |
 | 7 | Optional AI explanations | Gemini API *explains* an existing alert. It never decides what is an alert |
@@ -386,6 +391,59 @@ Design rules:
   removed duplicate.
 - **One shape for both formats.** TSV and JSON logs produce identical DataFrames.
 
+---
+
+## Detection rules (Milestone 4)
+
+`netwatch/detection.py` turns connections into **alerts** using four simple,
+deterministic rules. The same log with the same settings always gives the
+same alerts with the same IDs, and every alert explains itself from the data
+and the thresholds. No AI is involved in deciding what is an alert.
+
+| ID | Alert type | Triggers when (default settings) | Base severity |
+|----|------------|----------------------------------|---------------|
+| NW-001 | Possible Port Scan | one source contacts ≥ 15 distinct ports on the same host within 60 s | Medium |
+| NW-002 | High Connection Rate | one source starts ≥ 100 connections within 60 s | Low |
+| NW-003 | Suspicious Destination Port | traffic reaches a watchlisted port (23, 3389, 4444, 5900, 6667, 31337) | Low |
+| NW-004 | Repeated Failed Connections | ≥ 10 rejected/unanswered TCP attempts to the same service within 60 s | Medium |
+
+Severity goes up one level when the measured value is at least 3 × the
+threshold. **Alerts describe possible suspicious behaviour, not confirmed
+attacks**, and each rule has documented false positives. The full reference
+(windows, failed states, severity, tuning, false positives) is in
+[docs/DETECTION_RULES.md](docs/DETECTION_RULES.md).
+
+Try it on the synthetic demo data:
+
+```bash
+python -m netwatch.detection data/demo/conn_demo.log
+```
+
+```
+Alerts:  6 (High 2, Medium 1, Low 3)
+
+[2] HIGH   NW-001 Possible Port Scan   (NW-001-a9bbeb729a3d)
+    Source:       203.0.113.66
+    Destination:  192.0.2.20
+    Protocol:     tcp   Ports (60): 1, 7, 9, 13, 21, 22, 23, 25, 26, 37, 53, 79, 80, 81, 88 ...
+    Seen:         2025-03-10 08:20:00 UTC -> 2025-03-10 08:20:23 UTC (60 connection(s))
+    Measured:     60 (threshold 15, window 60 s)
+    Why:          203.0.113.66 contacted 60 different TCP ports on 192.0.2.20 within 60 s ...
+```
+
+Change thresholds or pick rules from the command line:
+
+```bash
+python -m netwatch.detection data/demo/conn_demo.log --scan-ports 50 --rules NW-001,NW-004
+```
+
+With 50 instead of 15 ports the scan alert is still raised, but as Medium
+instead of High (60 ports is no longer ≥ 3 × the threshold).
+
+The demo dataset and what it contains are described in
+[data/demo/README.md](data/demo/README.md). It is made by
+`scripts/generate_demo_data.py` (fixed seed, documentation IPs only).
+
 ## Running the tests
 
 ```bash
@@ -411,6 +469,11 @@ netwatch/            Python package
   pcap_inspect.py    Milestone 1: PCAP preview tool
   zeek_conn.py       Milestone 2: Zeek conn.log parser (TSV + JSON)
   analyzer.py        Milestone 3: pandas traffic analysis
+  detection.py       Milestone 4: rule-based detection engine
+scripts/
+  generate_demo_data.py  Rebuilds the synthetic demo dataset and fixtures
+data/demo/           Synthetic demo dataset (tracked; documentation IPs only)
+docs/DETECTION_RULES.md  Rule logic, severity, false positives, tuning
 tests/               Unit tests (python -m unittest)
   fixtures/zeek/     Synthetic conn.log files (documentation IPs only)
 docs/LEARNING_LOG.md Concepts learned, milestone by milestone

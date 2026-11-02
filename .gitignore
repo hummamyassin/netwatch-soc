@@ -31,5 +31,6 @@ data/pcaps/*
 !data/pcaps/README.md
 data/zeek_logs/
 *.log
-# ...except the synthetic test fixtures (documentation IPs only, no real traffic)
+# ...except synthetic test fixtures and the demo dataset (documentation IPs only, no real traffic)
 !tests/fixtures/**/*.log
+!data/demo/*.log

@@ -14,7 +14,7 @@ Optional later: Gemini API to *explain* existing alerts. Never use it to decide 
 1. Networking, PCAP, Wireshark ✅ (`netwatch/pcap_inspect.py`)
 2. Zeek logs ✅ (`netwatch/zeek_conn.py`: conn.log TSV/JSON → `ConnRecord`)
 3. Python log analysis ✅ (`netwatch/analyzer.py`: `ConnRecord`s → typed pandas DataFrame + stats)
-4. Deterministic detection rules
+4. Deterministic detection rules ✅ (`netwatch/detection.py`: NW-001..NW-004 → `Alert`; docs/DETECTION_RULES.md)
 5. Streamlit SOC dashboard (Plotly)
 6. Alert investigation workflow
 7. Optional AI explanations (Gemini)
@@ -53,6 +53,16 @@ tests with `.venv\Scripts\python`. `pcap_inspect.py` and `zeek_conn.py` stay std
   rows had a value. Sort with explicit tie-breakers (count desc, then IP/port asc).
   Each row has an `event_id` (Zeek uid, else `row-N`); duplicate uids are dropped once.
   No UI code in analysis modules.
+- Detection: rules are pure functions of (connections DataFrame, `DetectionConfig`).
+  No randomness, no wall-clock time, no AI. Sort input by (ts, event_id) first.
+  Sliding windows are inclusive; overlapping triggering windows merge into one alert.
+  Alert IDs = rule + SHA-256 of (src, dst, first/last seen, event_ids): never change the
+  scheme silently (a regression test pins it). Never invent missing values (`dst_ip`
+  None for many destinations; ports/protocols only from data). Missing or normal
+  `conn_state` is never "failed"; only TCP S0/REJ/RSTOS0/SH are. Wording: "possible",
+  never "confirmed attack". Keep docs/DETECTION_RULES.md in sync with `RULES`.
+- Demo data: `scripts/generate_demo_data.py` (fixed seed) writes `data/demo/` and
+  `tests/fixtures/zeek/normal_traffic.log`. Tests pin the demo's 6 expected alerts.
 - Tests: stdlib `unittest`, run with `python -m unittest -v`. Mock tshark;
   real-tool tests must `skipIf` the tool is missing. Test data is synthetic, in
   `tests/fixtures/`, using documentation IP ranges only (192.0.2.0/24, 198.51.100.0/24,

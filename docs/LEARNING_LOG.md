@@ -157,3 +157,60 @@ Add to it at the end of each milestone, in your own words.
 - In the analyzer output, which host is the "top talker", and is that expected?
 - What would it mean if one host's `resp_bytes` were much larger than its `orig_bytes`?
 - Why might a 1-second time bucket be a bad choice for a log covering a whole day?
+
+---
+
+## Milestone 4: Rule-based detection
+
+### Key ideas
+- A **detection rule** is a precise, written condition such as "one source
+  contacts at least 15 distinct ports on the same host within 60 seconds".
+  Writing it down exactly makes every alert explainable and testable.
+- A **threshold** is the number that must be reached. A **time window** is
+  how close together the events must be. Together they turn "a lot, quickly"
+  into something a computer can check.
+- **Deterministic** means same input + same settings = same output, every
+  time. That is essential for trust: an analyst (or an auditor) can re-run the
+  rule and get the same answer.
+
+### Sliding windows
+- For every connection, look back N seconds and count what is inside the
+  window. If the count reaches the threshold, the rule fires.
+- **Edges matter**: decide whether exactly 60 s apart is inside a 60-second
+  window (here it is, so the window is inclusive) and test it.
+- **Overlapping windows** would give dozens of alerts for one scan. Merging
+  windows that share connections gives one alert per burst, which is easier
+  for an analyst and avoids **alert fatigue**.
+
+### False positives and severity
+- A **false positive** is an alert on harmless activity: the IT team's
+  vulnerability scanner looks exactly like an attacker's port scan. Every
+  rule documents its usual false positives so the analyst knows what to check.
+- **Severity** expresses how strong or unusual the signal is (High / Medium /
+  Low), not proof of damage. Here it rises one level when the observed value
+  is at least 3× the threshold.
+- **Context vs evidence**: a connection to port 4444 is *context* (some
+  exploit tools use it by default), not *evidence*. Any program can use any port.
+
+### Zeek connection states in detection
+- Failed TCP attempts are `S0` (no answer), `REJ` (refused), `RSTOS0`, `SH`.
+- One-way UDP is also `S0`, but that is normal for mDNS or syslog, so UDP is
+  never counted as "failed".
+- A **missing** state is unknown, not failed. Never let missing data make an
+  alert look stronger.
+
+### Engineering habits
+- **Stable alert IDs** (a hash of what the alert is about) let notes and
+  ticket references survive re-runs.
+- **Deduplication**: identical detections collapse into one alert, and a
+  connection logged twice counts once.
+- **Unsorted input**: Zeek writes conn.log in end-time order, so sort by
+  start time before applying windows.
+- **Test the boundaries**: threshold − 1 must not fire, threshold must fire,
+  and the window edge must behave as documented.
+
+### Questions to explore
+- Why does a brute-force attack against an *open* SSH server not show up as
+  failed connections in conn.log? Where would you look instead?
+- Which demo alerts would you close as "Benign / Expected Activity", and why?
+- How would you tune NW-002 for a network that has a busy proxy server?
