@@ -15,7 +15,7 @@ Optional later: Gemini API to *explain* existing alerts. Never use it to decide 
 2. Zeek logs ✅ (`netwatch/zeek_conn.py`: conn.log TSV/JSON → `ConnRecord`)
 3. Python log analysis ✅ (`netwatch/analyzer.py`: `ConnRecord`s → typed pandas DataFrame + stats)
 4. Deterministic detection rules ✅ (`netwatch/detection.py`: NW-001..NW-004 → `Alert`; docs/DETECTION_RULES.md)
-5. Streamlit SOC dashboard (Plotly)
+5. Streamlit SOC dashboard ✅ (`dashboard.py` UI + `netwatch/dashboard_data.py` data prep)
 6. Alert investigation workflow
 7. Optional AI explanations (Gemini)
 8. Testing and GitHub polish
@@ -63,6 +63,13 @@ tests with `.venv\Scripts\python`. `pcap_inspect.py` and `zeek_conn.py` stay std
   never "confirmed attack". Keep docs/DETECTION_RULES.md in sync with `RULES`.
 - Demo data: `scripts/generate_demo_data.py` (fixed seed) writes `data/demo/` and
   `tests/fixtures/zeek/normal_traffic.log`. Tests pin the demo's 6 expected alerts.
+- Dashboard: `dashboard.py` is UI only; put logic and formatting in
+  `netwatch/dashboard_data.py` (unit-tested). Never fake numbers: everything comes
+  from analyzer/detection. Uploads: extension allow-list, 20 MB limit, binary refused,
+  parsed in memory (`parse_conn_text`), never written to disk. Escape any file-derived
+  text passed to Markdown (`safe_md`); show raw text with `st.code`/`st.dataframe`.
+  Cache parsing/detection with `st.cache_data`. `.streamlit/config.toml` keeps the app
+  on localhost with telemetry off. UI tests use `streamlit.testing.v1.AppTest`.
 - Tests: stdlib `unittest`, run with `python -m unittest -v`. Mock tshark;
   real-tool tests must `skipIf` the tool is missing. Test data is synthetic, in
   `tests/fixtures/`, using documentation IP ranges only (192.0.2.0/24, 198.51.100.0/24,

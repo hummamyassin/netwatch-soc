@@ -345,6 +345,28 @@ def detect_format(first_line: str) -> str:
     )
 
 
+def parse_conn_text(text: str, source: str | Path = "<text>") -> ConnLogResult:
+    """Parse conn.log content that is already in memory, e.g. an uploaded file.
+
+    `source` is only a label for messages and the result; nothing is read from
+    or written to disk. A leading byte-order mark and Windows (CRLF) line
+    endings are handled. Bad lines are skipped and listed in result.errors.
+    Raises ZeekLogError if the content as a whole cannot be used.
+    """
+    lines = text.removeprefix("﻿").split("\n")
+
+    first_line = next((line for line in lines if line.strip()), None)
+    if first_line is None:
+        raise ZeekLogError(f"Log file is empty: {source}")
+
+    result = ConnLogResult(path=Path(source), log_format=detect_format(first_line))
+    if result.log_format == "tsv":
+        read_tsv(lines, result)
+    else:
+        read_json(lines, result)
+    return result
+
+
 def parse_conn_log(raw_path: str | Path) -> ConnLogResult:
     """Read a conn.log file. Bad lines are skipped and listed in result.errors.
 
@@ -359,18 +381,7 @@ def parse_conn_log(raw_path: str | Path) -> ConnLogResult:
     # utf-8-sig drops a byte-order mark if an editor added one.
     # Reading in text mode turns Windows CRLF line endings into plain \n.
     text = path.read_text(encoding="utf-8-sig", errors="replace")
-    lines = text.split("\n")
-
-    first_line = next((line for line in lines if line.strip()), None)
-    if first_line is None:
-        raise ZeekLogError(f"Log file is empty: {path}")
-
-    result = ConnLogResult(path=path.resolve(), log_format=detect_format(first_line))
-    if result.log_format == "tsv":
-        read_tsv(lines, result)
-    else:
-        read_json(lines, result)
-    return result
+    return parse_conn_text(text, path.resolve())
 
 
 # ---------------------------------------------------------------------------

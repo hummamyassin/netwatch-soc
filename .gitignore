@@ -14,10 +14,12 @@ env/
 # --- Secrets (future Gemini API key etc.) ---
 .env
 *.key
+.streamlit/secrets.toml
 
-# --- Editors / OS ---
+# --- Editors / OS / local assistant settings ---
 .vscode/
 .idea/
+.claude/
 .DS_Store
 Thumbs.db
 

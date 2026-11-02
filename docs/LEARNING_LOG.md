@@ -214,3 +214,51 @@ Add to it at the end of each milestone, in your own words.
   failed connections in conn.log? Where would you look instead?
 - Which demo alerts would you close as "Benign / Expected Activity", and why?
 - How would you tune NW-002 for a network that has a busy proxy server?
+
+---
+
+## Milestone 5: The SOC dashboard
+
+### What a SOC dashboard is for
+- A **SOC (Security Operations Centre)** dashboard gives analysts a quick
+  picture: how much traffic, which hosts are busiest, which services are
+  used, and which alerts need attention, without reading raw logs.
+- **KPIs** (key performance indicators) are the headline numbers at the
+  top. Here: total connections, unique source/destination IPs, and alerts per
+  severity.
+- Charts answer "what changed?": a spike in the connections-over-time chart
+  lines up with the port scan and the DNS burst in the demo data.
+
+### Streamlit basics
+- A Streamlit app is a Python script that **re-runs from top to bottom**
+  every time the user clicks something. That is simple to write, but slow
+  work must be **cached** (`st.cache_data`) so it only runs when its inputs
+  change (a new file or new settings).
+- `st.session_state` remembers values between those re-runs (for example
+  the applied detection settings).
+- A **form** (`st.form`) groups inputs so the expensive work runs once, when
+  the user presses *Apply*, not after every keystroke.
+
+### Keeping the UI honest and testable
+- The UI file only *displays* results. Parsing, analysis, detection and
+  formatting live in the `netwatch` package, where unit tests check them.
+  If the UI showed made-up numbers, the tests would not notice. This way
+  they do.
+- Streamlit's `AppTest` runs the real dashboard script without a browser,
+  clicks buttons, uploads files and reads the KPI values back.
+
+### Security of a small web app
+- **Untrusted uploads**: check extension and size, refuse binary files,
+  parse in memory, never save or execute them. Use only the file *name* as a
+  label, never as a path.
+- **Markdown injection**: Streamlit renders Markdown, so text from a file
+  could become a link or a remote image (which leaks that you opened it).
+  Escape it (`safe_md`) or show it in a table or code block.
+- **Exposure**: by default some servers listen on every network interface.
+  `server.address = "localhost"` keeps the dashboard and investigation notes
+  on this computer. Telemetry is turned off with `gatherUsageStats = false`.
+
+### Questions to explore
+- Which chart would show you a port scan fastest, and which a DNS burst?
+- Why is caching keyed on the file *content* (a hash) rather than its name?
+- What could go wrong if the dashboard listened on all network interfaces in a café?

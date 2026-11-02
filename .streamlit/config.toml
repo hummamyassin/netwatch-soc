@@ -1,0 +1,28 @@
+# Streamlit settings for NetWatch SOC.
+# Streamlit reads this file when you run `streamlit run dashboard.py` from the project folder.
+
+[server]
+# Listen on this computer only, so nobody else on the network can open the
+# dashboard or read investigation notes.
+address = "localhost"
+port = 8501
+# Largest accepted upload in MB (netwatch/dashboard_data.py enforces the same limit).
+maxUploadSize = 20
+# Do not ask for an e-mail address on first start.
+showEmailPrompt = false
+
+[browser]
+# Do not send usage statistics to Streamlit.
+gatherUsageStats = false
+
+[client]
+# Hide developer menu items that are not useful for analysts.
+toolbarMode = "minimal"
+
+[theme]
+base = "dark"
+primaryColor = "#2dd4bf"
+backgroundColor = "#0b1220"
+secondaryBackgroundColor = "#111a2e"
+textColor = "#e2e8f0"
+borderColor = "#1f2a44"

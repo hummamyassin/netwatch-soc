@@ -2,10 +2,12 @@
 # Install into a virtual environment (see README.md -> Setup):
 #   python -m pip install -r requirements.txt
 #
-# Tested with pandas 3.1.0 on Python 3.12 (Windows 11).
+# Tested with pandas 3.1.0, Streamlit 1.66.1 and Plotly 7.1.0 on Python 3.12 (Windows 11).
 # A package is added here only in the milestone that first uses it.
 
 pandas>=3.0,<4        # Milestone 3: traffic analysis
+streamlit>=1.66,<2    # Milestone 5: dashboard
+plotly>=7.0,<8        # Milestone 5: dashboard charts
 
 # External (non-Python) tools are optional and documented in README.md:
 #   - TShark (installed with Wireshark) for netwatch.pcap_inspect

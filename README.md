@@ -26,7 +26,7 @@ PCAP ──► Wireshark / Zeek ──► Structured logs ──► Python detec
   same alert, and every alert can be explained.
 - Present alerts in a dashboard and practise an analyst's investigation workflow.
 
-## Current capabilities (Milestones 1–4)
+## Current capabilities (Milestones 1–5)
 
 - `netwatch/pcap_inspect.py`: prints a readable preview of the first packets
   in a `.pcap` / `.pcapng` file: time, source/destination IP, protocol,
@@ -47,9 +47,12 @@ PCAP ──► Wireshark / Zeek ──► Structured logs ──► Python detec
 - A synthetic demo dataset in `data/demo/` (450 connections, TSV and JSON)
   and synthetic test fixtures in `tests/fixtures/zeek/`, so everything can be
   tried and tested without real captures or Zeek.
-- Unit tests for all tools.
+- `dashboard.py`: a dark SOC-style **Streamlit** dashboard with KPI cards,
+  Plotly charts and a filterable alerts table. It uses the real analyzer and
+  detection engine on the demo data or on an uploaded Zeek log.
+- Unit tests for all tools, plus headless UI tests for the dashboard.
 
-The dashboard is not built yet. See the roadmap.
+The alert investigation workflow is not built yet. See the roadmap.
 
 ## Roadmap
 
@@ -59,7 +62,7 @@ The dashboard is not built yet. See the roadmap.
 | 2 | **Zeek logs** ✅ | Parse Zeek `conn.log` (TSV and JSON) into normalised connection records |
 | 3 | **Python log analysis** ✅ | Load Zeek logs into pandas, summarise hosts, ports, protocols, states, bytes, time |
 | 4 | **Deterministic detection rules** ✅ | Port scan, connection rate, watchlisted ports, repeated failures; explainable alerts |
-| 5 | Streamlit SOC dashboard | Alerts table, charts (Plotly), filters |
+| 5 | **Streamlit SOC dashboard** ✅ | KPI cards, Plotly charts, alerts table with filters, uploads, detection settings |
 | 6 | Alert investigation workflow | Drill into an alert, see related connections, mark status |
 | 7 | Optional AI explanations | Gemini API *explains* an existing alert. It never decides what is an alert |
 | 8 | Testing and GitHub polish | More tests, screenshots, clean README, demo data |
@@ -444,6 +447,44 @@ The demo dataset and what it contains are described in
 [data/demo/README.md](data/demo/README.md). It is made by
 `scripts/generate_demo_data.py` (fixed seed, documentation IPs only).
 
+---
+
+## SOC dashboard (Milestone 5)
+
+Start the dashboard from the project folder (virtual environment active):
+
+```bash
+streamlit run dashboard.py
+```
+
+Your browser opens <http://localhost:8501>. Press `Ctrl+C` in the terminal to stop it.
+
+What you get:
+
+- **Sidebar:** the demo dataset (TSV or JSON) or your own Zeek `conn.log`
+  upload, detection settings for every rule (applied with one button), and
+  navigation.
+- **KPI cards:** total connections, unique source/destination IPs, total
+  alerts and alerts per severity.
+- **Network analysis:** connections over time, top source IPs, top
+  destination ports, TCP vs UDP distribution, connection states.
+- **Security alerts:** a table with severity, status, type, source,
+  destination, ports, first/last seen (UTC) and connection count, filterable
+  by severity, type and status.
+
+Everything on screen is computed by the tested `netwatch` package. The UI
+file contains no detection or analysis logic. Results are cached, so
+changing a filter does not re-parse the log or re-run detection.
+
+**Uploads:** `.log`, `.json`, `.tsv` or `.txt`, up to 20 MB. Files are parsed
+in memory and never saved or executed. Binary files (for example a PCAP
+uploaded by mistake) are refused with a helpful message, and empty or
+malformed logs show clear errors instead of crashing.
+
+**Privacy settings** (`.streamlit/config.toml`): the app only listens on
+`localhost` (other computers on your network cannot open it), and
+Streamlit's usage statistics are turned off.
+
 ## Running the tests
 
 ```bash
@@ -452,7 +493,8 @@ python -m unittest -v
 
 The tests don't need TShark or Zeek. One extra test reads a tiny synthetic
 capture with real TShark. It is skipped automatically when TShark isn't
-installed.
+installed. The dashboard tests use Streamlit's `AppTest` to run
+`dashboard.py` without a browser, including simulated uploads.
 
 ## Safety
 
@@ -470,6 +512,9 @@ netwatch/            Python package
   zeek_conn.py       Milestone 2: Zeek conn.log parser (TSV + JSON)
   analyzer.py        Milestone 3: pandas traffic analysis
   detection.py       Milestone 4: rule-based detection engine
+  dashboard_data.py  Milestone 5: data preparation for the dashboard (no UI code)
+dashboard.py         Milestone 5: Streamlit user interface
+.streamlit/config.toml  Dashboard settings: localhost only, no telemetry, dark theme
 scripts/
   generate_demo_data.py  Rebuilds the synthetic demo dataset and fixtures
 data/demo/           Synthetic demo dataset (tracked; documentation IPs only)
