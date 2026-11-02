@@ -1,0 +1,6 @@
+# Milestone 1 uses only the Python standard library.
+# Third-party packages (pandas, streamlit, plotly) will be added here
+# in the milestone that first needs them.
+#
+# External (non-Python) requirement: TShark, installed with Wireshark.
+# See README.md -> "Setup".

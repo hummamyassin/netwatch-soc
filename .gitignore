@@ -1,0 +1,33 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+
+# --- Secrets (future Gemini API key etc.) ---
+.env
+*.key
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Network captures and logs: never commit real traffic ---
+*.pcap
+*.pcapng
+*.cap
+*.pcap.gz
+*.pcapng.gz
+data/pcaps/*
+!data/pcaps/README.md
+data/zeek_logs/
+*.log
