@@ -368,6 +368,7 @@ docs/
   DETECTION_RULES.md    Rule logic, severity, false positives, tuning
   USAGE.md              Command-line guide with sample output
   DESIGN.md             Design system: tokens, components, charts, motion
+  REAL_PCAP_LAB.md      End-to-end lab on a real public capture with Zeek 8
   LEARNING_LOG.md       Concepts learned, milestone by milestone, and a glossary
   screenshots/          Dashboard screenshots (synthetic data)
 CLAUDE.md               Project rules for the AI coding assistant

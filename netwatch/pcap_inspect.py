@@ -177,15 +177,21 @@ def format_timestamp(epoch: str) -> str:
     return moment.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3] + " UTC"
 
 
+# Trailing layers that describe the *payload format*, not a network protocol:
+# 'data' is unidentified bytes; the others are body formats carried by HTTP & co.
+PAYLOAD_LAYERS = frozenset({"data", "data-text-lines", "media", "xml", "json"})
+
+
 def top_protocol(protocols: str) -> str:
     """Return the highest protocol layer, e.g. 'eth:ethertype:ip:udp:dns' -> 'DNS'.
 
-    A trailing 'data' layer is TShark's label for payload bytes it could not
-    identify, not a protocol, so it is skipped: 'null:ip:tcp:data' -> 'TCP'
-    and 'eth:ip:tcp:http:data' -> 'HTTP', matching Wireshark's Protocol column.
+    Trailing payload-format layers (PAYLOAD_LAYERS) are skipped, so
+    'null:ip:tcp:data' -> 'TCP' and 'eth:ip:tcp:http:data-text-lines:xml'
+    -> 'HTTP'. Wireshark shows the same protocol (it writes 'HTTP/XML' for
+    the second one; NetWatch keeps just the protocol).
     """
     layers = [layer for layer in protocols.split(":") if layer]
-    while len(layers) > 1 and layers[-1] == "data":
+    while len(layers) > 1 and layers[-1] in PAYLOAD_LAYERS:
         layers.pop()
     return layers[-1].upper() if layers else MISSING
 

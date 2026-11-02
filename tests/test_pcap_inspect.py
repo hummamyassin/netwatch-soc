@@ -186,6 +186,11 @@ class ParseTests(unittest.TestCase):
             "null:ip:udp:data": "UDP",
             "eth:ethertype:ip:icmp:data": "ICMP",
             "data": "DATA",  # nothing else known: keep it rather than show '-'
+            # Found in Wireshark's public http.cap sample (packets 27 and 38):
+            "eth:ethertype:ip:tcp:http:data-text-lines": "HTTP",
+            "eth:ethertype:ip:tcp:http:data-text-lines:xml": "HTTP",
+            "eth:ethertype:ip:tcp:http:media": "HTTP",
+            "eth:ethertype:ip:tcp:http:json": "HTTP",
         }
         for stack, expected in cases.items():
             with self.subTest(stack=stack):

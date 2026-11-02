@@ -327,6 +327,22 @@ class FormatDetailTests(TempDirTestCase):
         r = zc.parse_conn_log(self.write(text)).records[0]
         self.assertEqual((r.src_ip, r.dst_ip), ("192.0.2.1", "198.51.100.2"))
 
+    def test_zeek_8_header_with_ip_proto_column(self):
+        # Exact header layout of a real Zeek 8.0.11 conn.log (REAL_PCAP_LAB.md): it adds an
+        # ip_proto column and writes an unset tunnel_parents as '-'. Addresses are documentation-only.
+        fields = ("ts uid id.orig_h id.orig_p id.resp_h id.resp_p proto service duration orig_bytes "
+                  "resp_bytes conn_state local_orig local_resp missed_bytes history orig_pkts orig_ip_bytes "
+                  "resp_pkts resp_ip_bytes tunnel_parents ip_proto").split()
+        row = ("1084443427.311224 CR3Xra1sAz3FfqK113 192.0.2.10 3372 198.51.100.20 80 tcp http 30.063228 479 "
+               "18364 SF F F 0 ShADadfF 16 1127 18 19092 - 6").split()
+        text = "\n".join(["#separator \\x09", "#unset_field\t-", "#empty_field\t(empty)", "#path\tconn",
+                          "#fields\t" + "\t".join(fields), "\t".join(row), "#close\t2026-11-02-14-31-38"])
+        result = zc.parse_conn_log(self.write(text + "\n"))
+        self.assertEqual(result.errors, [])
+        r = result.records[0]
+        self.assertEqual((r.src_ip, r.dst_port, r.proto, r.service, r.conn_state), ("192.0.2.10", 80, "tcp", "http", "SF"))
+        self.assertEqual((r.orig_bytes, r.resp_bytes, r.orig_pkts, r.resp_pkts), (479, 18364, 16, 18))
+
     def test_header_only_log_has_no_records(self):
         result = zc.parse_conn_log(self.write(TSV_HEADER + "\n#close\tx\n"))
         self.assertEqual((result.records, result.errors), ([], []))
