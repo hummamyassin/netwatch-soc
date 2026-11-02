@@ -178,8 +178,15 @@ def format_timestamp(epoch: str) -> str:
 
 
 def top_protocol(protocols: str) -> str:
-    """Return the highest protocol layer, e.g. 'eth:ethertype:ip:udp:dns' -> 'DNS'."""
+    """Return the highest protocol layer, e.g. 'eth:ethertype:ip:udp:dns' -> 'DNS'.
+
+    A trailing 'data' layer is TShark's label for payload bytes it could not
+    identify, not a protocol, so it is skipped: 'null:ip:tcp:data' -> 'TCP'
+    and 'eth:ip:tcp:http:data' -> 'HTTP', matching Wireshark's Protocol column.
+    """
     layers = [layer for layer in protocols.split(":") if layer]
+    while len(layers) > 1 and layers[-1] == "data":
+        layers.pop()
     return layers[-1].upper() if layers else MISSING
 
 

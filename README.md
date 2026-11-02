@@ -183,7 +183,7 @@ Showing 3 packet(s) (limit 3)
 | `#` | Packet number in this preview |
 | `Time` | When the packet was recorded, in UTC |
 | `Source` / `Destination` | IPv4 or IPv6 address that sent / received the packet |
-| `Protocol` | Highest protocol layer TShark recognised (e.g. `TCP`, `DNS`, `HTTP`, `ARP`) |
+| `Protocol` | Highest protocol layer TShark recognised (e.g. `TCP`, `DNS`, `HTTP`, `ARP`). Unidentified payload (`data`) is skipped, as in Wireshark |
 | `SrcPort` / `DstPort` | TCP or UDP port. Well-known ports identify services (80 = HTTP, 443 = HTTPS, 53 = DNS) |
 | `Length` | Size of the whole packet on the wire, in bytes |
 

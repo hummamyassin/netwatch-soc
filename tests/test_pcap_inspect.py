@@ -177,6 +177,20 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(p.protocol, "ARP")
         self.assertEqual((p.src_ip, p.dst_ip), (pi.MISSING, pi.MISSING))
 
+    def test_generic_data_layer_is_not_the_protocol(self):
+        # Found in a real loopback capture: Wireshark shows TCP / HTTP, not "DATA".
+        cases = {
+            "null:ip:tcp:data": "TCP",
+            "null:ipv6:tcp:data": "TCP",
+            "null:ip:tcp:http:data": "HTTP",
+            "null:ip:udp:data": "UDP",
+            "eth:ethertype:ip:icmp:data": "ICMP",
+            "data": "DATA",  # nothing else known: keep it rather than show '-'
+        }
+        for stack, expected in cases.items():
+            with self.subTest(stack=stack):
+                self.assertEqual(pi.top_protocol(stack), expected)
+
     def test_short_or_garbled_line_does_not_crash(self):
         p = pi.parse_tshark_line("not-a-number")
         self.assertEqual(p.timestamp, "not-a-number")
