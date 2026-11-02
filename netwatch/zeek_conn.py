@@ -44,6 +44,19 @@ REQUIRED_FIELDS = ["ts", "id.orig_h", "id.resp_h"]
 # How many skipped-line messages the CLI prints before summarising.
 MAX_ERRORS_SHOWN = 10
 
+# Text fields may only contain the characters Zeek itself writes for them.
+# Anything else (terminal escape codes, Markdown links, HTML...) means the line
+# is not genuine Zeek output, so it is rejected before it can reach a report,
+# an alert explanation or the dashboard.
+#   field: (case conversion, allowed pattern)
+TEXT_FIELD_RULES = {
+    "uid": (None, re.compile(r"[A-Za-z0-9]{1,64}")),
+    "proto": (str.lower, re.compile(r"[a-z0-9_]{1,32}")),
+    "service": (str.lower, re.compile(r"[a-z0-9_.,\-]{1,64}")),
+    "conn_state": (str.upper, re.compile(r"[A-Z0-9]{1,16}")),
+    "history": (None, re.compile(r"[A-Za-z^]{1,256}")),
+}
+
 # What each Zeek conn_state code means (paraphrased from Zeek's documentation).
 # "Originator" = the side that started the connection; "responder" = the other side.
 CONN_STATES = {
@@ -175,6 +188,17 @@ def to_text(value: Any) -> str:
     return str(value).strip()
 
 
+def to_token(value: Any, field_name: str) -> str:
+    """A text field limited to the characters Zeek writes for it (see TEXT_FIELD_RULES)."""
+    convert_case, pattern = TEXT_FIELD_RULES[field_name]
+    text = to_text(value)
+    if convert_case is not None:
+        text = convert_case(text)
+    if not pattern.fullmatch(text):
+        raise ValueError(f"unexpected characters: {text[:40]!r}")
+    return text
+
+
 # ---------------------------------------------------------------------------
 # Normalisation: raw field values -> ConnRecord
 # ---------------------------------------------------------------------------
@@ -200,7 +224,7 @@ def normalize(raw: dict[str, Any]) -> ConnRecord:
         except ValueError as error:
             raise ValueError(f"field '{name}': {error}") from None
 
-    proto = get("proto", lambda v: to_text(v).lower())
+    proto = get("proto", lambda v: to_token(v, "proto"))
     src_port = get("id.orig_p", to_port)
     dst_port = get("id.resp_p", to_port)
 
@@ -213,20 +237,20 @@ def normalize(raw: dict[str, Any]) -> ConnRecord:
 
     return ConnRecord(
         ts=get("ts", to_timestamp),
-        uid=get("uid", to_text),
+        uid=get("uid", lambda v: to_token(v, "uid")),
         src_ip=get("id.orig_h", to_ip),
         src_port=src_port,
         dst_ip=get("id.resp_h", to_ip),
         dst_port=dst_port,
         proto=proto,
-        service=get("service", lambda v: to_text(v).lower()),
+        service=get("service", lambda v: to_token(v, "service")),
         duration=get("duration", to_duration),
         orig_bytes=get("orig_bytes", to_count),
         resp_bytes=get("resp_bytes", to_count),
         orig_pkts=get("orig_pkts", to_count),
         resp_pkts=get("resp_pkts", to_count),
-        conn_state=get("conn_state", lambda v: to_text(v).upper()),
-        history=get("history", to_text),
+        conn_state=get("conn_state", lambda v: to_token(v, "conn_state")),
+        history=get("history", lambda v: to_token(v, "history")),
         icmp_type=icmp_type,
         icmp_code=icmp_code,
     )

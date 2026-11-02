@@ -102,7 +102,58 @@ Add to it at the end of each milestone, in your own words.
 - **Synthetic fixtures** with documentation IP ranges (RFC 5737, RFC 3849)
   give realistic tests without any real or private traffic.
 
+### Hardening added in Milestone 3
+- Text fields (`uid`, `proto`, `service`, `conn_state`, `history`) only accept
+  the characters Zeek writes. Logs are **untrusted input**. A crafted line could
+  carry terminal escape codes (which recolour or rewrite your terminal) or
+  Markdown links (which a dashboard might render). Rejecting them at the parser
+  protects every tool that comes later.
+
 ### Questions to explore
 - Which conn_state would you expect for a UDP DNS query that never got an answer?
 - Why could `service` say `http` even when the port is not 80?
 - What would many `REJ` connections from one source to many ports on one target suggest?
+
+---
+
+## Milestone 3: Network log analysis with pandas
+
+### pandas basics used here
+- A **DataFrame** is a table: each column has one data type, each row is one
+  connection. `records_to_dataframe` builds it from the parser's `ConnRecord`s.
+- **dtypes matter**: `ts` is `datetime64[us, UTC]` (real timestamps, so
+  time maths works), ports and byte counts are `Int64` (whole numbers that
+  can also be `<NA>`), and `duration` is `Float64`.
+- `value_counts()` counts how often each value appears. `groupby([...]).size()`
+  counts combinations (for example port + protocol). `resample("5min").size()`
+  counts rows per time bucket.
+
+### Analysis ideas
+- **Top talkers**: the source IPs that start the most connections. A sudden
+  new top talker is worth a look.
+- **Top destination ports** show which *services* are used. Count them per
+  protocol, because `53/udp` (DNS queries) and `53/tcp` (zone transfers, large
+  answers) are different things.
+- **Protocol mix**: mostly TCP plus some UDP (DNS, NTP) is typical. Lots of
+  ICMP or unusual protocols can be interesting.
+- **Connection states** summarise success vs failure. Many `S0`/`REJ` means
+  many attempts that went unanswered or were refused.
+- **Connections over time** shows bursts. Filling quiet buckets with 0 keeps
+  the chart honest; leaving them out would hide gaps.
+
+### Data quality habits
+- **Missing is not zero.** `sum()` skips `<NA>`, so always report coverage:
+  "668 bytes from 5 of 6 connections". Otherwise an analyst could wrongly
+  conclude that a connection transferred nothing.
+- **Deterministic sorting.** When two IPs have the same count, sort them by IP
+  address (numerically: `10.0.0.2` before `10.0.0.10`). Reports that change
+  order between runs confuse people and break tests.
+- **Deduplicate by a stable ID.** Zeek's `uid` identifies a connection, so a
+  repeated uid means the same connection was logged twice.
+- **UTC everywhere.** Mixing time zones is a classic source of wrong
+  timelines in investigations.
+
+### Questions to explore
+- In the analyzer output, which host is the "top talker", and is that expected?
+- What would it mean if one host's `resp_bytes` were much larger than its `orig_bytes`?
+- Why might a 1-second time bucket be a bad choice for a log covering a whole day?

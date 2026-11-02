@@ -13,7 +13,7 @@ Optional later: Gemini API to *explain* existing alerts. Never use it to decide 
 ## Milestones (build ONE at a time, and only with explicit approval)
 1. Networking, PCAP, Wireshark ✅ (`netwatch/pcap_inspect.py`)
 2. Zeek logs ✅ (`netwatch/zeek_conn.py`: conn.log TSV/JSON → `ConnRecord`)
-3. Python log analysis (pandas)
+3. Python log analysis ✅ (`netwatch/analyzer.py`: `ConnRecord`s → typed pandas DataFrame + stats)
 4. Deterministic detection rules
 5. Streamlit SOC dashboard (Plotly)
 6. Alert investigation workflow
@@ -26,6 +26,8 @@ Do not start the next milestone, or add its features early, without the owner's 
 Python, pandas, Streamlit, Plotly, Wireshark/TShark, Zeek, Git/GitHub, Gemini (phase 7 only).
 No databases, Docker, cloud infra, microservices, web frameworks or enterprise features.
 Add a package to `requirements.txt` only in the milestone that first uses it.
+Packages live in the project virtual environment `.venv` (git-ignored); run tools and
+tests with `.venv\Scripts\python`. `pcap_inspect.py` and `zeek_conn.py` stay stdlib-only.
 
 ## Safety rules
 - Offline analysis of existing capture files only. No live capture, port
@@ -45,6 +47,12 @@ Add a package to `requirements.txt` only in the milestone that first uses it.
 - Zeek parsing: whole-file problems raise `ZeekLogError`. Bad lines are skipped and
   recorded in `ConnLogResult.errors` as `"line N: ..."`. Missing values are `None`
   (never `"-"`, `""` or `0`). TSV and JSON must produce identical `ConnRecord`s.
+  Text fields are restricted to Zeek's own characters (`TEXT_FIELD_RULES`).
+- Analysis (pandas): DataFrame columns have fixed dtypes (`ts` = datetime64[us, UTC],
+  counts = `Int64`, text = object). Missing stays `<NA>`/`None`; sums report how many
+  rows had a value. Sort with explicit tie-breakers (count desc, then IP/port asc).
+  Each row has an `event_id` (Zeek uid, else `row-N`); duplicate uids are dropped once.
+  No UI code in analysis modules.
 - Tests: stdlib `unittest`, run with `python -m unittest -v`. Mock tshark;
   real-tool tests must `skipIf` the tool is missing. Test data is synthetic, in
   `tests/fixtures/`, using documentation IP ranges only (192.0.2.0/24, 198.51.100.0/24,

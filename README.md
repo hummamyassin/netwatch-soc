@@ -26,7 +26,7 @@ PCAP ──► Wireshark / Zeek ──► Structured logs ──► Python detec
   same alert, and every alert can be explained.
 - Present alerts in a dashboard and practise an analyst's investigation workflow.
 
-## Current capabilities (Milestones 1–2)
+## Current capabilities (Milestones 1–3)
 
 - `netwatch/pcap_inspect.py`: prints a readable preview of the first packets
   in a `.pcap` / `.pcapng` file: time, source/destination IP, protocol,
@@ -36,9 +36,13 @@ PCAP ──► Wireshark / Zeek ──► Structured logs ──► Python detec
   record (real timestamps, validated IPs, numbers instead of strings, `None`
   for missing values). Bad lines are skipped and reported with their line
   number. Includes a small CLI preview.
+- `netwatch/analyzer.py`: loads connections into a **pandas** DataFrame and
+  summarises them: totals, unique IPs, protocol mix, top sources, top
+  destination ports, connection states, bytes, durations and connections
+  over time. Missing values are never counted as zero.
 - Synthetic Zeek fixtures in `tests/fixtures/zeek/`, so everything can be
   tested without installing Zeek.
-- Unit tests for both tools.
+- Unit tests for all tools.
 
 Detection rules and the dashboard are not built yet. See the roadmap.
 
@@ -48,7 +52,7 @@ Detection rules and the dashboard are not built yet. See the roadmap.
 |---|-----------|---------------------------|
 | 1 | **Networking, PCAP, Wireshark** ✅ | Project setup; read packets from a capture with TShark |
 | 2 | **Zeek logs** ✅ | Parse Zeek `conn.log` (TSV and JSON) into normalised connection records |
-| 3 | Python log analysis | Load Zeek logs into pandas, summarise hosts, ports, protocols |
+| 3 | **Python log analysis** ✅ | Load Zeek logs into pandas, summarise hosts, ports, protocols, states, bytes, time |
 | 4 | Deterministic detection rules | Simple rules, e.g. many ports from one host, rare DNS, odd connections |
 | 5 | Streamlit SOC dashboard | Alerts table, charts (Plotly), filters |
 | 6 | Alert investigation workflow | Drill into an alert, see related connections, mark status |
@@ -67,16 +71,22 @@ You need Python 3.10 or newer. Check with:
 python --version
 ```
 
-Milestones 1–2 use only the Python standard library, so there is nothing to
-`pip install` yet. Optionally create a virtual environment (an isolated
-folder for this project's packages) for later milestones:
+Create a virtual environment (an isolated folder for this project's
+packages, so nothing is installed into your system Python), then install
+the packages from `requirements.txt` into it:
 
 ```bash
 python -m venv .venv
 ```
 
-Activate it on Windows (PowerShell) with `.venv\Scripts\Activate.ps1`, or
-on macOS/Linux with `source .venv/bin/activate`.
+```bash
+.venv\Scripts\python -m pip install -r requirements.txt
+```
+
+On macOS/Linux use `.venv/bin/python` instead of `.venv\Scripts\python`.
+You can also activate the environment (`.venv\Scripts\Activate.ps1` in
+PowerShell, `source .venv/bin/activate` on macOS/Linux) and then simply type
+`python`. The commands below assume an activated environment.
 
 ### 2. Wireshark and TShark
 
@@ -317,6 +327,65 @@ You don't need Zeek for this milestone. When you want real logs:
 
 Keep real logs in `data/zeek_logs/`. Git ignores that folder.
 
+Text fields (`uid`, `proto`, `service`, `conn_state`, `history`) may only
+contain the characters Zeek itself writes. A line with anything else (for
+example terminal escape codes or Markdown links) is skipped and reported,
+so hostile values never reach reports or the dashboard.
+
+---
+
+## Traffic analysis with pandas (Milestone 3)
+
+`netwatch/analyzer.py` turns the parsed connections into a pandas
+**DataFrame** (a table with typed columns) and answers the first questions an
+analyst asks about a log: how much traffic, between whom, on which ports,
+and how did the connections end?
+
+```bash
+python -m netwatch.analyzer tests/fixtures/zeek/conn_tsv.log --top 5
+```
+
+Output (shortened):
+
+```
+Connections:     6 (0 line(s) skipped, 0 duplicate(s) removed)
+Time range:      2023-11-14 22:13:20 UTC -> 2023-11-14 22:13:25 UTC (5.8 s)
+Source IPs:      2 unique
+Destination IPs: 4 unique
+Bytes sent:      668 B by originators (5 of 6 connections recorded), 2.2 KB by responders (5 of 6 recorded)
+Avg duration:    0.280 s (5 of 6 connections recorded)
+
+Protocols
+proto  connections  percent
+  tcp            3     50.0
+  udp            2     33.3
+ icmp            1     16.7
+...
+```
+
+| Function | Answers |
+|----------|---------|
+| `total_connections`, `unique_source_ips`, `unique_destination_ips` | How big is the log, how many hosts are involved? |
+| `protocol_distribution` | TCP vs UDP vs ICMP mix, with percentages |
+| `top_source_ips` | Which hosts started the most connections? |
+| `top_destination_ports` | Which services were contacted most? Counted per protocol (`53/udp` ≠ `53/tcp`) |
+| `connection_state_distribution` | How did connections end (`SF`, `S0`, `REJ`, ...)? |
+| `byte_totals`, `duration_stats` | How much data moved, how long connections lasted |
+| `connections_over_time` | Activity per time bucket (UTC), with quiet periods shown as 0 |
+
+Design rules:
+
+- **Missing is not zero.** A connection without a byte count is left out of
+  the byte total, and the report says how many connections were included
+  ("5 of 6 recorded").
+- **UTC everywhere.** All timestamps are stored as UTC.
+- **Deterministic order.** Ties in top-N tables are broken by IP address
+  (numerically) or port number, so the same log always gives the same table.
+- **No double counting.** A connection that appears twice (same Zeek `uid`,
+  for example a log appended to itself) is counted once and reported as a
+  removed duplicate.
+- **One shape for both formats.** TSV and JSON logs produce identical DataFrames.
+
 ## Running the tests
 
 ```bash
@@ -341,6 +410,7 @@ installed.
 netwatch/            Python package
   pcap_inspect.py    Milestone 1: PCAP preview tool
   zeek_conn.py       Milestone 2: Zeek conn.log parser (TSV + JSON)
+  analyzer.py        Milestone 3: pandas traffic analysis
 tests/               Unit tests (python -m unittest)
   fixtures/zeek/     Synthetic conn.log files (documentation IPs only)
 docs/LEARNING_LOG.md Concepts learned, milestone by milestone

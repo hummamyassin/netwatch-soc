@@ -243,6 +243,28 @@ class LineErrorTests(TempDirTestCase):
                 self.assertTrue(message.startswith(line_label))
                 self.assertIn(detail, message)
 
+    def test_unexpected_characters_in_text_fields_are_rejected(self):
+        # Genuine Zeek output never contains these. Accepting them could inject
+        # terminal escape codes or Markdown links into reports and the dashboard.
+        result = self.parse_tsv_rows(
+            tsv_row(service="[click](http://example.com)"),   # line 6
+            tsv_row(conn_state="S0\x1b[31m"),                  # line 7
+            tsv_row(uid="row-1"),                              # line 8
+            tsv_row(history="Sh<b>"),                          # line 9
+            tsv_row(proto="tcp;rm"),                           # line 10
+            GOOD_TSV_ROW,                                      # line 11
+        )
+        self.assertEqual(len(result.records), 1)
+        self.assertEqual([e.split(":")[0] for e in result.errors],
+                         ["line 6", "line 7", "line 8", "line 9", "line 10"])
+        self.assertIn("field 'service'", result.errors[0])
+        self.assertIn("field 'conn_state'", result.errors[1])
+        self.assertNotIn("\x1b", result.errors[1])  # shown escaped, never raw
+
+    def test_text_fields_are_normalised(self):
+        r = self.parse_tsv_rows(tsv_row(service="SSL,HTTP", conn_state="sf", proto="TCP")).records[0]
+        self.assertEqual((r.service, r.conn_state, r.proto), ("ssl,http", "SF", "tcp"))
+
     def test_empty_marker_becomes_none(self):
         result = self.parse_tsv_rows(tsv_row(service="(empty)", history="(empty)"))
         self.assertIsNone(result.records[0].service)
