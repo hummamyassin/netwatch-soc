@@ -45,7 +45,6 @@ BINARY_SIGNATURES = {
     b"PK\x03\x04": "a ZIP archive",
 }
 
-SEVERITY_ICONS = {"High": "🔴", "Medium": "🟠", "Low": "🔵"}
 DEFAULT_STATUS = NEW
 
 ALERT_TABLE_COLUMNS = ["Severity", "Status", "Alert type", "Source", "Destination", "Ports", "Protocol",
@@ -152,8 +151,8 @@ def destination_label(alert: Alert) -> str:
 
 def alert_label(alert: Alert) -> str:
     """One-line description used in selection lists."""
-    return (f"{SEVERITY_ICONS.get(alert.severity, '')} {alert.severity} · {alert.alert_type} · "
-            f"{alert.src_ip} → {destination_label(alert)} · {alert.alert_id}")
+    return (f"{alert.severity}  |  {alert.alert_type}  |  {alert.src_ip} → {destination_label(alert)}"
+            f"  |  {alert.alert_id}")
 
 
 # ---------------------------------------------------------------------------
@@ -240,7 +239,7 @@ def filter_alerts(alerts: list[Alert], severities: Iterable[str] | None = None,
 def alerts_table(alerts: list[Alert], status_of: Callable[[str], str] = _no_status) -> pd.DataFrame:
     """The alerts as display rows (already formatted), most severe and most recent first."""
     rows = [{
-        "Severity": f"{SEVERITY_ICONS.get(a.severity, '')} {a.severity}",
+        "Severity": a.severity,
         "Alert type": a.alert_type,
         "Source": a.src_ip,
         "Destination": destination_label(a),

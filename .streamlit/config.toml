@@ -20,9 +20,11 @@ gatherUsageStats = false
 toolbarMode = "minimal"
 
 [theme]
+# Same tokens as assets/dashboard.css.
 base = "dark"
 primaryColor = "#2dd4bf"
-backgroundColor = "#0b1220"
-secondaryBackgroundColor = "#111a2e"
-textColor = "#e2e8f0"
-borderColor = "#1f2a44"
+backgroundColor = "#0b1018"
+secondaryBackgroundColor = "#141c29"
+textColor = "#e6ecf4"
+borderColor = "#1e2836"
+baseRadius = "8px"

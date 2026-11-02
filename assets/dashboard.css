@@ -1,0 +1,231 @@
+/* NetWatch SOC dashboard styles.
+ *
+ * Loaded once by dashboard.py with st.html(Path(...)). Streamlit's theme
+ * (.streamlit/config.toml) sets the base colours; this file adds the design
+ * tokens, the small component vocabulary (badges, panels, key/value lists,
+ * timeline, stepper) and the browser surfaces Streamlit leaves unstyled.
+ *
+ * Motion: one 200 ms entrance for panels that appear because the analyst
+ * changed something (page, alert, action). Press feedback on buttons.
+ * Everything is disabled under prefers-reduced-motion.
+ */
+
+:root {
+  --nw-bg: #0b1018;
+  --nw-panel: #0f1621;
+  --nw-raised: #141c29;
+  --nw-line: #1e2836;
+  --nw-line-strong: #2b3749;
+  --nw-text: #e6ecf4;
+  --nw-muted: #9aa8bb;
+  --nw-faint: #7a889c;
+  --nw-accent: #2dd4bf;
+  --nw-accent-soft: rgba(45, 212, 191, 0.12);
+  --nw-high: #f2575c;
+  --nw-medium: #f2a93b;
+  --nw-low: #64a8f8;
+  --nw-ok: #3ccf91;
+  --nw-radius: 8px;
+  --nw-radius-sm: 6px;
+  --nw-mono: "Source Code Pro", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --nw-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* ---------- Browser surfaces ---------- */
+
+::selection { background: rgba(45, 212, 191, 0.28); color: var(--nw-text); }
+* { scrollbar-width: thin; scrollbar-color: var(--nw-line-strong) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--nw-line-strong); border-radius: 10px; border: 2px solid var(--nw-bg); }
+::-webkit-scrollbar-track { background: transparent; }
+:focus-visible { outline: 2px solid var(--nw-accent); outline-offset: 2px; }
+
+/* Numbers line up in every table, metric and list. */
+[data-testid="stMetricValue"], [data-testid="stDataFrame"], .nw-kv dd, .nw-num { font-variant-numeric: tabular-nums; }
+
+/* ---------- Page rhythm ---------- */
+
+[data-testid="stMainBlockContainer"] { padding-top: 2.25rem; padding-bottom: 4rem; max-width: 1440px; }
+[data-testid="stMain"] h1 { font-size: 1.75rem; font-weight: 650; letter-spacing: -0.015em; line-height: 1.2; margin-bottom: 0.15rem; }
+[data-testid="stMain"] h3 { font-size: 1.05rem; font-weight: 600; letter-spacing: -0.005em; margin-top: 0.75rem; }
+
+/* ---------- Sidebar ---------- */
+
+[data-testid="stSidebar"] { background: var(--nw-panel); border-right: 1px solid var(--nw-line); }
+[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] { padding-top: 1.25rem; }
+[data-testid="stSidebar"] hr { margin: 1.1rem 0; border-color: var(--nw-line); }
+[data-testid="stSidebar"] h3 { font-size: 0.8rem; font-weight: 600; color: var(--nw-muted); margin: 0 0 0.25rem; }
+
+.st-key-brand { gap: 0.1rem; }
+.st-key-brand [data-testid="stMarkdownContainer"] p { font-size: 1.08rem; letter-spacing: -0.01em; }
+.st-key-brand [data-testid="stIconMaterial"] { color: var(--nw-accent); }
+.st-key-brand [data-testid="stCaptionContainer"] p { font-size: 0.78rem; color: var(--nw-faint); }
+
+/* ---------- Metrics ---------- */
+
+[data-testid="stMetric"] {
+  background: var(--nw-panel);
+  border: 1px solid var(--nw-line) !important;
+  border-radius: var(--nw-radius);
+  padding: 0.85rem 1rem 0.9rem;
+  transition: border-color 160ms ease;
+}
+[data-testid="stMetric"]:hover { border-color: var(--nw-line-strong) !important; }
+[data-testid="stMetricLabel"] p { font-size: 0.8rem; color: var(--nw-muted); font-weight: 500; }
+[data-testid="stMetricValue"] { font-size: 1.75rem; font-weight: 600; letter-spacing: -0.01em; line-height: 1.15; }
+
+/* Severity metrics: the number carries the semantic colour, nothing else does. */
+.st-key-kpi_high [data-testid="stMetricValue"] { color: var(--nw-high); }
+.st-key-kpi_medium [data-testid="stMetricValue"] { color: var(--nw-medium); }
+.st-key-kpi_low [data-testid="stMetricValue"] { color: var(--nw-low); }
+
+/* ---------- Panels (bordered containers) ---------- */
+
+[data-testid="stVerticalBlockBorderWrapper"] {
+  background: var(--nw-panel);
+  border-color: var(--nw-line) !important;
+  border-radius: var(--nw-radius) !important;
+}
+.nw-panel-title { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin: 0 0 0.35rem; }
+.nw-panel-title strong { font-size: 0.92rem; font-weight: 600; color: var(--nw-text); }
+.nw-panel-title span { font-size: 0.78rem; color: var(--nw-faint); }
+
+/* ---------- Section headers ---------- */
+
+.nw-section { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin: 1.75rem 0 0.6rem; }
+.nw-section h2 { font-size: 1.05rem; font-weight: 600; margin: 0; padding: 0; color: var(--nw-text); letter-spacing: -0.005em; }
+.nw-section p { margin: 0; font-size: 0.82rem; color: var(--nw-muted); }
+
+.nw-context { font-size: 0.85rem; color: var(--nw-muted); margin: 0 0 1.1rem; }
+.nw-context b { color: var(--nw-text); font-weight: 600; }
+.nw-context code, .nw-mono { font-family: var(--nw-mono); font-size: 0.82em; color: var(--nw-text); background: none; padding: 0; }
+
+/* ---------- Badges ---------- */
+
+.nw-badge {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 0.55rem;
+  border-radius: 999px; font-size: 0.74rem; font-weight: 600; letter-spacing: 0.01em;
+  border: 1px solid transparent; white-space: nowrap;
+}
+.nw-badge--high { color: var(--nw-high); background: rgba(242, 87, 92, 0.12); border-color: rgba(242, 87, 92, 0.35); }
+.nw-badge--medium { color: var(--nw-medium); background: rgba(242, 169, 59, 0.12); border-color: rgba(242, 169, 59, 0.35); }
+.nw-badge--low { color: var(--nw-low); background: rgba(100, 168, 248, 0.12); border-color: rgba(100, 168, 248, 0.35); }
+.nw-badge--new { color: var(--nw-muted); background: rgba(154, 168, 187, 0.10); border-color: var(--nw-line-strong); }
+.nw-badge--investigating { color: var(--nw-medium); background: rgba(242, 169, 59, 0.10); border-color: rgba(242, 169, 59, 0.30); }
+.nw-badge--closed { color: var(--nw-ok); background: rgba(60, 207, 145, 0.10); border-color: rgba(60, 207, 145, 0.30); }
+.nw-badge--neutral { color: var(--nw-muted); background: transparent; border-color: var(--nw-line-strong); }
+
+/* ---------- Alert header (investigation page) ---------- */
+
+.nw-alert-head { animation: nw-enter 200ms var(--nw-ease-out) both; padding: 0.15rem 0 0.25rem; }
+.nw-alert-head h2 { font-size: 1.35rem; font-weight: 650; letter-spacing: -0.01em; margin: 0.45rem 0 0.25rem; padding: 0; }
+.nw-alert-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; }
+.nw-alert-route { font-family: var(--nw-mono); font-size: 0.85rem; color: var(--nw-muted); }
+.nw-alert-route b { color: var(--nw-text); font-weight: 500; }
+
+.nw-why {
+  margin: 0.9rem 0 0.2rem; padding: 0.85rem 1rem; border-radius: var(--nw-radius);
+  background: var(--nw-raised); border: 1px solid var(--nw-line);
+  font-size: 0.9rem; line-height: 1.6; color: var(--nw-text); max-width: 78ch;
+}
+.nw-why-title { display: block; font-size: 0.78rem; font-weight: 600; color: var(--nw-muted); margin-bottom: 0.3rem; }
+
+/* ---------- Key/value list ---------- */
+
+.nw-kv { display: grid; grid-template-columns: minmax(130px, max-content) 1fr; margin: 0; animation: nw-enter 200ms var(--nw-ease-out) both; }
+.nw-kv dt, .nw-kv dd { padding: 0.5rem 0; border-top: 1px solid var(--nw-line); margin: 0; font-size: 0.86rem; }
+.nw-kv dt:first-of-type, .nw-kv dt:first-of-type + dd { border-top: 0; }
+.nw-kv dt { color: var(--nw-muted); padding-right: 1.25rem; }
+.nw-kv dd { color: var(--nw-text); overflow-wrap: anywhere; }
+
+/* ---------- Workflow stepper ---------- */
+
+.nw-steps { display: flex; gap: 0.35rem; margin: 0.15rem 0 0.9rem; padding: 0; list-style: none; }
+.nw-steps li {
+  flex: 1; padding: 0.45rem 0.6rem; border-radius: var(--nw-radius-sm);
+  border: 1px solid var(--nw-line); background: var(--nw-bg);
+  font-size: 0.78rem; color: var(--nw-faint); text-align: center;
+  transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease;
+}
+.nw-steps li.is-done { color: var(--nw-muted); border-color: var(--nw-line-strong); }
+.nw-steps li.is-current { color: var(--nw-text); border-color: rgba(45, 212, 191, 0.55); background: var(--nw-accent-soft); font-weight: 600; }
+.nw-disposition { font-size: 0.86rem; color: var(--nw-muted); margin: -0.35rem 0 0.8rem; }
+.nw-disposition b { color: var(--nw-text); font-weight: 600; }
+
+/* ---------- Case timeline ---------- */
+
+.nw-timeline { list-style: none; margin: 0.25rem 0 0; padding: 0; animation: nw-enter 200ms var(--nw-ease-out) both; }
+.nw-timeline li { position: relative; padding: 0 0 0.9rem 1.15rem; border-left: 1px solid var(--nw-line-strong); margin-left: 4px; }
+.nw-timeline li:last-child { border-left-color: transparent; padding-bottom: 0; }
+.nw-timeline li::before {
+  content: ""; position: absolute; left: -4.5px; top: 0.3rem;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--nw-bg); border: 1.5px solid var(--nw-line-strong);
+}
+.nw-timeline li.is-status::before { border-color: var(--nw-accent); background: var(--nw-accent); }
+.nw-timeline-head { display: flex; justify-content: space-between; gap: 0.75rem; font-size: 0.82rem; }
+.nw-timeline-head b { font-weight: 600; color: var(--nw-text); }
+.nw-timeline-head time { color: var(--nw-faint); font-size: 0.76rem; white-space: nowrap; }
+.nw-timeline-note {
+  margin-top: 0.35rem; padding: 0.55rem 0.7rem; border-radius: var(--nw-radius-sm);
+  background: var(--nw-raised); border: 1px solid var(--nw-line);
+  font-size: 0.85rem; line-height: 1.55; color: var(--nw-text); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.nw-timeline-detail { font-size: 0.8rem; color: var(--nw-muted); margin-top: 0.15rem; }
+
+/* ---------- Evidence summary ---------- */
+
+.nw-facts { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; margin: 0 0 0.6rem; font-size: 0.82rem; color: var(--nw-muted); }
+.nw-facts b { color: var(--nw-text); font-weight: 600; }
+
+/* ---------- Empty states ---------- */
+
+.nw-empty {
+  padding: 2.25rem 1.5rem; border: 1px dashed var(--nw-line-strong); border-radius: var(--nw-radius);
+  text-align: center; color: var(--nw-muted); animation: nw-enter 200ms var(--nw-ease-out) both;
+}
+.nw-empty strong { display: block; color: var(--nw-text); font-size: 0.98rem; font-weight: 600; margin-bottom: 0.35rem; }
+.nw-empty p { margin: 0 auto; max-width: 56ch; font-size: 0.86rem; line-height: 1.55; }
+
+/* ---------- Controls ---------- */
+
+[data-testid="stBaseButton-primary"], [data-testid="stBaseButton-secondary"],
+[data-testid="stBaseButton-primaryFormSubmit"], [data-testid="stBaseButton-secondaryFormSubmit"],
+[data-testid="stBaseButton-pills"], [data-testid="stBaseButton-pillsActive"] {
+  transition: transform 140ms var(--nw-ease-out), background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+[data-testid="stBaseButton-primary"]:active, [data-testid="stBaseButton-secondary"]:active,
+[data-testid="stBaseButton-primaryFormSubmit"]:active, [data-testid="stBaseButton-secondaryFormSubmit"]:active,
+[data-testid="stBaseButton-pills"]:active, [data-testid="stBaseButton-pillsActive"]:active { transform: scale(0.97); }
+[data-testid="stBaseButton-primary"], [data-testid="stBaseButton-primaryFormSubmit"] { color: #06231f; font-weight: 600; }
+
+/* Filter pills: selected reads as "on" without shouting. */
+[data-testid="stBaseButton-pills"] { background: transparent; border-color: var(--nw-line-strong); color: var(--nw-faint); }
+[data-testid="stBaseButton-pills"]:hover { border-color: var(--nw-muted); color: var(--nw-text); }
+[data-testid="stBaseButton-pillsActive"] { background: var(--nw-accent-soft); border-color: rgba(45, 212, 191, 0.45); color: var(--nw-text); }
+[data-testid="stBaseButton-pillsActive"]:hover { border-color: var(--nw-accent); }
+
+[data-testid="stFileUploaderDropzone"] { background: var(--nw-bg); border: 1px dashed var(--nw-line-strong); border-radius: var(--nw-radius); }
+[data-testid="stExpander"] details { border-color: var(--nw-line) !important; border-radius: var(--nw-radius) !important; background: var(--nw-bg); }
+[data-testid="stAlert"] { border-radius: var(--nw-radius); }
+[data-testid="stDataFrame"] { border-radius: var(--nw-radius); }
+
+/* ---------- Motion ---------- */
+
+@keyframes nw-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .nw-alert-head, .nw-kv, .nw-timeline, .nw-empty { animation: none; }
+  [data-testid^="stBaseButton"]:active { transform: none !important; }
+}
+
+/* ---------- Small screens ---------- */
+
+@media (max-width: 640px) {
+  [data-testid="stMainBlockContainer"] { padding-top: 1.25rem; }
+  .nw-section, .nw-panel-title { flex-direction: column; align-items: flex-start; gap: 0.15rem; }
+  .nw-kv { grid-template-columns: 1fr; }
+  .nw-kv dt { padding-bottom: 0; border-top: 1px solid var(--nw-line); }
+  .nw-kv dd { border-top: 0; padding-top: 0.15rem; }
+  .nw-steps li { font-size: 0.72rem; padding: 0.4rem 0.3rem; }
+}

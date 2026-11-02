@@ -70,8 +70,8 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | Zeek parsing | TSV and JSON `conn.log` → identical validated records. Strict checks on IPs, ports, counts and text fields. Bad lines reported with line numbers |
 | Traffic analysis | pandas statistics: totals, unique IPs, TCP/UDP mix, top sources, top destination ports, connection states, bytes, durations, connections over time |
 | Detection | Possible port scan, high connection rate, watchlisted destination port, repeated failed connections. Configurable thresholds, sliding windows, stable alert IDs, documented false positives |
-| Dashboard | Dark SOC-style Streamlit app: KPI cards, five Plotly charts, filterable alerts table, uploads, detection settings |
-| Investigation | Alert details, rule explanation, supporting connections, status workflow, notes, closure dispositions, history |
+| Dashboard | Dark SOC console in Streamlit: alert-first KPIs, filterable alert queue, five Plotly charts, uploads, detection settings, consistent design system |
+| Investigation | Alert header and explanation, details, supporting evidence, status stepper, notes, closure dispositions, activity timeline |
 | Demo data | 450 synthetic connections (TSV + JSON) with six scenarios, built from documentation-only IP addresses |
 | Quality | Unit, integration and headless UI tests. Deterministic results. No secrets or real traffic in the repository |
 
@@ -186,10 +186,11 @@ streamlit run dashboard.py
 - **Sidebar:** choose the demo dataset (TSV or JSON) or upload your own Zeek
   `conn.log` (`.log`, `.json`, `.tsv`, `.txt`, up to 20 MB), adjust every
   rule's thresholds and press **Apply settings**, and switch pages.
-- **Dashboard page:** KPI cards (connections, unique source and destination
-  IPs, alerts by severity), connections over time, top source IPs, top
-  destination ports, TCP vs UDP, connection states, and the **Security
-  Alerts** table with severity, type and status filters.
+- **Dashboard page:** alert KPIs first (total and per severity), then
+  traffic KPIs, the **alert queue** (severity, status and type filters, row
+  selection), and traffic analysis: connections over time with markers where
+  each alert began, top source IPs, top destination ports, protocol mix and
+  connection states (failed TCP states highlighted).
 - **Alert Investigation page:** select a row in the alerts table and press
   **Investigate** (or pick an alert). Review the details, the rule's
   explanation and false positives and the supporting connections, then
@@ -230,6 +231,9 @@ in the case history.
   proxies, admin RDP sessions, clients retrying a dead server...
 
 Full reference: [docs/DETECTION_RULES.md](docs/DETECTION_RULES.md).
+
+The dashboard's visual language (tokens, components, chart rules, motion) is
+documented in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Example workflow
 
@@ -351,7 +355,9 @@ netwatch/
   detection.py          Rule-based detection engine (NW-001..NW-004)
   investigation.py      Triage workflow: statuses, notes, dispositions
   dashboard_data.py     Data preparation for the dashboard (no UI code)
+  ui_components.py      Escaped HTML snippets for the dashboard (badges, timeline...)
 dashboard.py            Streamlit user interface
+assets/dashboard.css    Design tokens and component styles
 .streamlit/config.toml  Local-only, no telemetry, dark theme
 scripts/generate_demo_data.py  Rebuilds the synthetic demo data (fixed seed)
 data/demo/              Synthetic demo dataset (tracked)
@@ -361,6 +367,7 @@ docs/
   ARCHITECTURE.md       Modules, data flow, design decisions
   DETECTION_RULES.md    Rule logic, severity, false positives, tuning
   USAGE.md              Command-line guide with sample output
+  DESIGN.md             Design system: tokens, components, charts, motion
   LEARNING_LOG.md       Concepts learned, milestone by milestone, and a glossary
   screenshots/          Dashboard screenshots (synthetic data)
 CLAUDE.md               Project rules for the AI coding assistant

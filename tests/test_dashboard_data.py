@@ -167,7 +167,7 @@ class AlertTableTests(unittest.TestCase):
         self.assertEqual(list(table.columns), dd.ALERT_TABLE_COLUMNS)
         # Most severe first; within a severity, most recent first.
         self.assertEqual(table["Alert ID"].tolist(), ["NW-001-ddd", "NW-001-bbb", "NW-004-ccc", "NW-002-aaa"])
-        self.assertEqual(table["Severity"].tolist()[0], "🔴 High")
+        self.assertEqual(table["Severity"].tolist()[0], "High")
         self.assertEqual(set(table["Status"]), {"New"})
 
     def test_missing_values_are_shown_honestly(self):

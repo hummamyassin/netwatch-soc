@@ -400,3 +400,36 @@ own (see `docs/ARCHITECTURE.md` for the technical version).
 ### Questions to explore
 - Which of the limitations in the README would you fix first for a real SOC, and why?
 - How would you store investigation notes durably without adding a big database server?
+
+---
+
+## Design pass: from working dashboard to SOC console
+
+### What changed and why
+- **Information order follows the analyst's job.** Alerts (what needs
+  action) come before traffic statistics (context), and the alert queue sits
+  directly under the alert KPIs.
+- **Colour means something or it is not used.** Red, amber and blue mark
+  severity, amber also marks failed TCP states, and green marks closed
+  alerts. Everything else is neutral with one teal accent for actions and
+  selection. Emoji severity dots were replaced by coloured text, which is
+  easier to scan and works in every font.
+- **Charts tell one story each.** Horizontal ranked bars with the value at
+  the end are faster to read than pies. Bars keep the same thickness
+  everywhere, and the timeline marks where each alert began, so a spike and
+  its alert line up.
+- **Honest marks beat pretty ones.** A first attempt shaded each alert's
+  whole time range on the timeline. The 4444 alert spans ten minutes but is
+  only three short connections, so the band suggested continuous activity.
+  It was replaced with start markers.
+- **Motion only for state changes.** A 200 ms fade-up when an alert or
+  action changes what is shown, and press feedback on buttons. Nothing
+  loops, and reduced-motion settings turn it off.
+
+### Engineering habits from the pass
+- Keep design tokens in one place and mirror them in the theme and the charts.
+- Build HTML from small functions that escape every value, and test that a
+  hostile note renders as text.
+- Check the real page in a browser at desktop and phone width. Several
+  issues (clipped labels, a table scrollbar over the last row, a misleading
+  "custom settings" note) only showed up there.

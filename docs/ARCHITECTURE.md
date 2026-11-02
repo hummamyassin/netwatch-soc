@@ -26,7 +26,8 @@ flowchart LR
 | `netwatch/detection.py` | Applies four deterministic rules and produces `Alert`s with stable IDs, severity, thresholds, explanations and supporting event IDs | The security logic: explainable decisions, no AI | pandas, `analyzer` |
 | `netwatch/investigation.py` | Records the triage workflow per alert: status, notes, disposition, history | Turns alerts into decisions an analyst can document | Python stdlib |
 | `netwatch/dashboard_data.py` | Prepares everything the dashboard shows: upload checks, dataset loading, KPIs, chart data, alert tables, filters, escaping | Keeps logic out of the UI so it can be unit-tested | pandas, the modules above |
-| `dashboard.py` | The Streamlit user interface: sidebar, dashboard page, investigation page | Presentation only | Streamlit, Plotly, `dashboard_data` |
+| `netwatch/ui_components.py` | Builds small HTML snippets (badges, key/value list, stepper, activity timeline, empty states) with every value escaped | Polished presentation without letting log or note text become markup | `analyzer`, `detection`, `investigation` |
+| `dashboard.py` + `assets/dashboard.css` | The Streamlit user interface and its design system (see DESIGN.md) | Presentation only | Streamlit, Plotly, `dashboard_data`, `ui_components` |
 | `scripts/generate_demo_data.py` | Writes the synthetic demo dataset and the normal-traffic fixture | Reproducible, documentation-safe data for demos and tests | Python stdlib |
 
 The two lowest layers (`pcap_inspect`, `zeek_conn`) use only the standard
@@ -92,5 +93,6 @@ conn.log line ──► ConnRecord ──► DataFrame row ──► Alert ─�
 | `tests/test_detection.py` | Every rule: positive, negative, boundary (threshold and window edge), overlap merging, unsorted input, duplicates, regression-pinned alert ID, demo end to end |
 | `tests/test_investigation.py` | Workflow transitions, notes, dispositions, atomic failures, per-dataset isolation |
 | `tests/test_dashboard_data.py` | Upload checks, in-memory loading, KPIs, chart data, alert tables and filters, escaping |
+| `tests/test_ui_components.py` | HTML escaping of every component (hostile notes and log text), stepper, timeline order |
 | `tests/test_dashboard_app.py` | The real Streamlit app, headless: KPIs, filters, settings, uploads (valid, garbage, PCAP, partial, empty), investigation workflow |
 | `tests/test_integration.py` | Synthetic log → parser → analyzer → detection → dashboard data → investigation |

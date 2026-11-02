@@ -27,6 +27,15 @@ def metrics(at: AppTest) -> dict[str, str]:
     return {metric.label: metric.value for metric in at.metric}
 
 
+def html_text(at: AppTest) -> str:
+    """All HTML blocks on the main page (empty states, details, timeline), joined."""
+    return "\n".join(block.value for block in at.main.html)
+
+
+def toasts(at: AppTest) -> list[str]:
+    return [toast.value for toast in at.toast]
+
+
 def alerts_table(at: AppTest):
     """The alerts table on the dashboard page (the dataframe with an 'Alert ID' column)."""
     return next(frame.value for frame in at.main.dataframe if "Alert ID" in frame.value.columns)
@@ -53,7 +62,7 @@ class DashboardTests(unittest.TestCase):
         })
         table = alerts_table(at)
         self.assertEqual(len(table), 6)
-        self.assertEqual(table["Severity"].tolist()[:2], ["🔴 High", "🔴 High"])
+        self.assertEqual(table["Severity"].tolist()[:2], ["High", "High"])
 
     def test_json_demo_gives_the_same_numbers(self):
         at = start_app()
@@ -64,7 +73,7 @@ class DashboardTests(unittest.TestCase):
 
     def test_severity_filter(self):
         at = start_app()
-        at.multiselect(key="filter_severity").set_value(["High"]).run()
+        at.button_group(key="filter_severity").set_value(["High"]).run()
         self.assertEqual(len(alerts_table(at)), 2)
 
     def test_detection_settings_apply_and_reset(self):
@@ -93,7 +102,7 @@ class DashboardTests(unittest.TestCase):
         at = upload(start_app(), "normal.log", (FIXTURES / "normal_traffic.log").read_bytes())
         self.assert_no_crash(at)
         self.assertEqual(metrics(at)["Total Alerts"], "0")
-        self.assertTrue(any("No alerts" in s.value for s in at.success))
+        self.assertIn("No alerts for this log", html_text(at))
 
     def test_upload_pcap_is_refused_cleanly(self):
         at = upload(start_app(), "capture.log", b"\x0a\x0d\x0d\x0a" + b"\x00" * 64)
@@ -118,20 +127,20 @@ class DashboardTests(unittest.TestCase):
         self.assert_no_crash(at)
         self.assertEqual(metrics(at)["Total Connections"], "0")
         self.assertTrue(any("2 line(s) could not be parsed" in w.value for w in at.warning))
-        self.assertTrue(any("no valid connections" in i.value for i in at.info))
-        self.assertTrue(any("No alerts" in s.value for s in at.success))
+        self.assertIn("No connections to chart", html_text(at))
+        self.assertIn("No alerts for this log", html_text(at))
 
     def test_investigation_page_without_alerts(self):
         at = upload(start_app(), "normal.log", (FIXTURES / "normal_traffic.log").read_bytes())
         at.radio(key="page").set_value("Alert Investigation").run()
         self.assert_no_crash(at)
-        self.assertTrue(any("No alerts to investigate" in s.value for s in at.success))
+        self.assertIn("Nothing to investigate", html_text(at))
 
     def test_investigation_page_opens(self):
         at = start_app()
         at.radio(key="page").set_value("Alert Investigation").run()
         self.assert_no_crash(at)
-        self.assertEqual(at.main.title[0].value, "Alert Investigation")
+        self.assertEqual(at.main.title[0].value, "Alert investigation")
 
 
 def open_investigation(at: AppTest, alert_id: str) -> AppTest:
@@ -152,32 +161,31 @@ class InvestigationWorkflowTests(unittest.TestCase):
     def test_details_and_supporting_events(self):
         at = open_investigation(start_app(), SCAN_ALERT)
         self.assert_no_crash(at)
-        details = next(d.value for d in at.main.dataframe if "Field" in d.value.columns)
-        fields = dict(zip(details["Field"], details["Value"]))
-        self.assertEqual(fields["Alert ID"], SCAN_ALERT)
-        self.assertEqual(fields["Detection rule"], "NW-001 Possible Port Scan")
-        self.assertEqual((fields["Source"], fields["Destination"]), ("203.0.113.66", "192.0.2.20"))
-        self.assertEqual(fields["Rule threshold"], "at least 15 distinct ports on one host within 60 s")
+        page = html_text(at)
+        for expected in [SCAN_ALERT, "NW-001 Possible Port Scan", "203.0.113.66", "192.0.2.20",
+                         "at least 15 distinct ports on one host within 60 s", "Why this alert was raised"]:
+            self.assertIn(expected, page)
         events = next(d.value for d in at.main.dataframe if "Event ID" in d.value.columns)
         self.assertEqual(len(events), 60)
 
     def test_full_workflow_and_dashboard_status(self):
         at = open_investigation(start_app(), SCAN_ALERT)
         at.button(key=f"start_{SCAN_ALERT}").click().run()
-        self.assertTrue(any("Investigation started" in s.value for s in at.success))
+        self.assertIn("Investigation started.", toasts(at))
         at.text_area(key=f"note_{SCAN_ALERT}").input("Source is external; 50 ports refused, 2 open (22, 80).")
         at.button(key=f"add_note_{SCAN_ALERT}").click().run()
-        self.assertIn("Source is external; 50 ports refused, 2 open (22, 80).", [t.value for t in at.main.text])
+        self.assertIn("Source is external; 50 ports refused, 2 open (22, 80).", html_text(at))
         at.selectbox(key=f"disposition_{SCAN_ALERT}").set_value("True Positive")
         at.button(key=f"close_{SCAN_ALERT}").click().run()
         self.assert_no_crash(at)
-        self.assertTrue(any("closed as True Positive" in s.value for s in at.success))
+        self.assertIn("Alert closed as True Positive.", toasts(at))
+        self.assertIn("Closed as <b>True Positive</b>", html_text(at))
 
         at.radio(key="page").set_value("Dashboard").run()
         table = alerts_table(at).set_index("Alert ID")
         self.assertEqual(table.loc[SCAN_ALERT, "Status"], "Closed")
         self.assertEqual(table.loc[RETRY_ALERT, "Status"], "New")
-        at.multiselect(key="filter_status").set_value(["Closed"]).run()
+        at.button_group(key="filter_status").set_value(["Closed"]).run()
         self.assertEqual(alerts_table(at)["Alert ID"].tolist(), [SCAN_ALERT])
 
     def test_closing_requires_a_disposition(self):

@@ -75,7 +75,13 @@ tests with `.venv\Scripts\python`. `pcap_inspect.py` and `zeek_conn.py` stay std
   reopen (Closed→Investigating). Validate everything before mutating; failures raise
   `WorkflowError` and change nothing. One `InvestigationStore` per dataset ID in
   `st.session_state["investigations"]`: NOT durable (say so in UI and docs). Notes are
-  user text: display with `st.text`, never as Markdown. No automation/integrations.
+  user text: render only through `ui_components` (html.escape), never as Markdown.
+  No automation/integrations.
+- Design system: docs/DESIGN.md. Tokens in `assets/dashboard.css` mirror
+  `.streamlit/config.toml` and the chart constants in `dashboard.py`. Colour is semantic
+  only (severity, status, failed states); one accent. No emoji icons (use Material
+  Symbols). HTML snippets live in `netwatch/ui_components.py` and escape every value.
+  Motion: 200 ms state-change entrances and press feedback only; honour reduced motion.
 - Tests: stdlib `unittest`, run with `python -m unittest -v`. Mock tshark;
   real-tool tests must `skipIf` the tool is missing. Test data is synthetic, in
   `tests/fixtures/`, using documentation IP ranges only (192.0.2.0/24, 198.51.100.0/24,
